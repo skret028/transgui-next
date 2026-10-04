@@ -610,3 +610,19 @@ table.sub-table td.empty {
   border-color: #2f6fed;
   color: #fff;
 }
+
+/* ---- drag & drop overlay ---- */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(47, 111, 237, 0.18);
+  border: 3px dashed #3b82f6;
+  color: #dce9ff;
+  font-size: 16px;
+  font-weight: 600;
+  pointer-events: none;
+}

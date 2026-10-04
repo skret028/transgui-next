@@ -112,6 +112,7 @@ pub fn run() {
             rpc::rpc_torrent_details,
             rpc::rpc_torrent_action,
             rpc::rpc_set_labels,
+            rpc::rpc_torrent_set,
             rpc::rpc_add_torrent,
         ])
         .setup(|app| {

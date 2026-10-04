@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import "./App.css";
 import { rpc } from "./api";
 import { DEFAULT_FORM, loadConnForm, loadServers, saveConnForm, saveServers } from "./settings";
@@ -19,6 +20,7 @@ import { DetailsPanel } from "./components/DetailsPanel";
 import { AddTorrentDialog } from "./components/AddTorrentDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
+import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
 
 const REFRESH_MS = 2000;
 
@@ -45,6 +47,8 @@ function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
+  const [showProps, setShowProps] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const [servers, setServers] = useState<ServerBookmark[]>([]);
   const [selectedServerId, setSelectedServerId] = useState("");
@@ -261,6 +265,60 @@ function App() {
     [selection, refresh, refreshDetail],
   );
 
+  const loadPropsDetail = useCallback(
+    async (id: number) => (await rpc.details([id]))[0] ?? null,
+    [],
+  );
+
+  const applyProps = useCallback(
+    async (patch: Record<string, unknown>) => {
+      const ids = [...selection];
+      if (ids.length !== 1) return;
+      await rpc.setTorrent(ids, patch);
+      setShowProps(false);
+      await refresh();
+      void refreshDetail();
+    },
+    [selection, refresh, refreshDetail],
+  );
+
+  // Drag a .torrent file onto the window to add it.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+          const p = event.payload;
+          if (p.type === "enter" || p.type === "over") {
+            setDragging(true);
+          } else if (p.type === "drop") {
+            setDragging(false);
+            const torrents = p.paths.filter((x) => x.toLowerCase().endsWith(".torrent"));
+            if (torrents.length === 0) {
+              setError("只支持拖入 .torrent 文件");
+              return;
+            }
+            void (async () => {
+              for (const path of torrents) {
+                try {
+                  await rpc.add({ local_torrent_path: path });
+                } catch (e) {
+                  setError(String(e));
+                }
+              }
+              await refresh();
+            })();
+          } else {
+            setDragging(false);
+          }
+        });
+      } catch {
+        // drag & drop not available in this environment
+      }
+    })();
+    return () => unlisten?.();
+  }, [refresh]);
+
   // Keep an open details panel following the current selection.
   useEffect(() => {
     if (detailIdRef.current != null && !selection.has(detailIdRef.current) && selection.size > 0) {
@@ -313,6 +371,7 @@ function App() {
 
   return (
     <div className="app">
+      {dragging && <div className="drop-overlay">松开以添加 .torrent 文件</div>}
       <header className="topbar">
         <span className="brand">transgui-next</span>
         <span className={`dot ${connected ? "on" : "off"}`} />
@@ -364,6 +423,7 @@ function App() {
         onOpenAdd={() => setShowAdd(true)}
         onOpenSettings={() => setShowSettings(true)}
         onOpenLabels={() => setShowLabels(true)}
+        onOpenProps={() => setShowProps(true)}
         onRefresh={() => {
           void refresh();
           void refreshDetail();
@@ -423,6 +483,15 @@ function App() {
           known={knownLabels}
           onClose={() => setShowLabels(false)}
           onApply={applyLabels}
+        />
+      )}
+
+      {showProps && selection.size === 1 && (
+        <TorrentPropsDialog
+          id={[...selection][0]}
+          onLoad={loadPropsDetail}
+          onClose={() => setShowProps(false)}
+          onApply={applyProps}
         />
       )}
     </div>

@@ -362,6 +362,25 @@ pub async fn rpc_set_labels(
     .await
 }
 
+/// Apply an arbitrary `torrent-set` patch to the given torrents (per-torrent
+/// speed limits, bandwidth priority, seed ratio, queue position, …).
+#[tauri::command]
+pub async fn rpc_torrent_set(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    patch: Value,
+) -> Result<Value, String> {
+    if !patch.is_object() {
+        return Err("torrent-set 参数必须是对象".into());
+    }
+    if ids.is_empty() {
+        return Err("未选择种子".into());
+    }
+    let mut args = patch;
+    args["ids"] = json!(ids);
+    rpc_call(state.inner(), "torrent-set", args).await
+}
+
 /// Options for adding a torrent. Either `filename` (magnet / URL / a path on
 /// the daemon host) or `local_torrent_path` (a .torrent on THIS machine, sent
 /// as base64 metainfo) must be provided.
@@ -532,6 +551,41 @@ mod tests {
                 labels[0].as_str().unwrap_or(""),
                 "p2-verify",
                 "labels round trip failed"
+            );
+
+            // per-torrent speed limit + priority round trip
+            rpc_call(
+                &state,
+                "torrent-set",
+                json!({
+                    "ids": [id],
+                    "uploadLimited": true,
+                    "uploadLimit": 42,
+                    "bandwidthPriority": 1
+                }),
+            )
+            .await
+            .expect("torrent-set limits");
+            let tres = rpc_call(
+                &state,
+                "torrent-get",
+                json!({
+                    "ids": [id],
+                    "fields": ["uploadLimited", "uploadLimit", "bandwidthPriority"]
+                }),
+            )
+            .await
+            .expect("torrent-get limits");
+            let t0 = &tres["torrents"][0];
+            println!(
+                "limits after set = uploadLimited:{} uploadLimit:{} priority:{}",
+                t0["uploadLimited"], t0["uploadLimit"], t0["bandwidthPriority"]
+            );
+            assert_eq!(t0["uploadLimit"].as_i64().unwrap_or(0), 42, "uploadLimit");
+            assert_eq!(
+                t0["bandwidthPriority"].as_i64().unwrap_or(0),
+                1,
+                "bandwidthPriority"
             );
         }
     }

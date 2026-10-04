@@ -41,5 +41,8 @@ export const rpc = {
   setLabels: (ids: number[], labels: string[]) =>
     invoke<unknown>("rpc_set_labels", { ids, labels }),
 
+  setTorrent: (ids: number[], patch: Record<string, unknown>) =>
+    invoke<unknown>("rpc_torrent_set", { ids, patch }),
+
   add: (options: AddTorrentOptions) => invoke<unknown>("rpc_add_torrent", { options }),
 };

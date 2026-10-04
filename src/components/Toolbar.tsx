@@ -7,6 +7,7 @@ interface Props {
   onOpenAdd: () => void;
   onOpenSettings: () => void;
   onOpenLabels: () => void;
+  onOpenProps: () => void;
   onRefresh: () => void;
   onAutoRefreshChange: (value: boolean) => void;
 }
@@ -20,6 +21,7 @@ export function Toolbar({
   onOpenAdd,
   onOpenSettings,
   onOpenLabels,
+  onOpenProps,
   onRefresh,
   onAutoRefreshChange,
 }: Props) {
@@ -41,8 +43,11 @@ export function Toolbar({
       <button className="btn danger" onClick={() => onAction("remove")} disabled={!connected || needSel}>
         移除
       </button>
-      <button className="btn" onClick={onOpenLabels} disabled={!connected || needSel}>
+      <button className="btn" onClick={onOpenLabels} disabled={!connected || needSel || selectedCount > 1}>
         标签
+      </button>
+      <button className="btn" onClick={onOpenProps} disabled={!connected || selectedCount !== 1}>
+        属性
       </button>
       {selectedCount > 0 && <span className="sel-hint">已选 {selectedCount}</span>}
       <span className="spacer" />
