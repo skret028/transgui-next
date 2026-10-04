@@ -445,20 +445,18 @@ mod tests {
     use super::*;
 
     /// Live round-trip against a real transmission daemon.
-    /// Override with TRANSMISSION_TEST_URL / _USER / _PASS.
     ///
-    /// Ignored by default: CI runners have no daemon, so an always-on version
-    /// would make `cargo test` fail. Run it locally with
-    /// `cargo test --lib -- --ignored live_rpc_roundtrip`.
+    /// TRANSMISSION_TEST_USER / _PASS are required — no credentials are baked
+    /// into this repository. TRANSMISSION_TEST_URL defaults to a local test
+    /// daemon. Ignored by default, because CI runners have no daemon: run it
+    /// locally with `cargo test --lib -- --ignored live_rpc_roundtrip`.
     #[ignore = "requires a live transmission daemon"]
     #[tokio::test]
     async fn live_rpc_roundtrip() {
         let base = std::env::var("TRANSMISSION_TEST_URL")
             .unwrap_or_else(|_| "http://localhost:19091/transmission/rpc".to_string());
-        let user =
-            std::env::var("TRANSMISSION_TEST_USER").unwrap_or_else(|_| "admin".to_string());
-        let pass =
-            std::env::var("TRANSMISSION_TEST_PASS").unwrap_or_else(|_| "admin".to_string());
+        let user = std::env::var("TRANSMISSION_TEST_USER").expect("TRANSMISSION_TEST_USER");
+        let pass = std::env::var("TRANSMISSION_TEST_PASS").expect("TRANSMISSION_TEST_PASS");
 
         let state = AppState::new();
         {

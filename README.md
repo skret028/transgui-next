@@ -70,12 +70,17 @@ cd src-tauri && cargo test --lib
 ```
 
 There is one extra test that talks to a real daemon. It is `#[ignore]`d so CI stays
-green, and can be run on purpose:
+green, and can be run on purpose. Credentials are never baked into the repository,
+so pass them in the environment:
 
 ```sh
-cd src-tauri && cargo test --lib -- --ignored live_rpc_roundtrip
-# override the target with TRANSMISSION_TEST_URL / _USER / _PASS
+cd src-tauri
+TRANSMISSION_TEST_USER=<user> TRANSMISSION_TEST_PASS=<pass> \
+  cargo test --lib -- --ignored live_rpc_roundtrip
 ```
+
+`TRANSMISSION_TEST_URL` defaults to `http://localhost:19091/transmission/rpc`
+(useful for a throwaway daemon in Docker).
 
 ## Translations
 
