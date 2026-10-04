@@ -1,3 +1,5 @@
+import { useT } from "../i18n";
+
 interface Props {
   connected: boolean;
   selectedCount: number;
@@ -25,40 +27,43 @@ export function Toolbar({
   onRefresh,
   onAutoRefreshChange,
 }: Props) {
+  const t = useT();
   const needSel = selectedCount === 0;
   return (
     <section className="toolbar">
       <button className="btn" onClick={() => onAction("start")} disabled={!connected || needSel}>
-        开始
+        {t("Start")}
       </button>
       <button className="btn" onClick={() => onAction("stop")} disabled={!connected || needSel}>
-        停止
+        {t("Stop")}
       </button>
       <button className="btn" onClick={() => onAction("verify")} disabled={!connected || needSel}>
-        校验
+        {t("Verify")}
       </button>
       <button className="btn" onClick={() => onAction("reannounce")} disabled={!connected || needSel}>
-        汇报
+        {t("Reannounce")}
       </button>
       <button className="btn danger" onClick={() => onAction("remove")} disabled={!connected || needSel}>
-        移除
+        {t("Remove")}
       </button>
       <button className="btn" onClick={onOpenLabels} disabled={!connected || needSel || selectedCount > 1}>
-        标签
+        {t("Labels")}
       </button>
       <button className="btn" onClick={onOpenProps} disabled={!connected || selectedCount !== 1}>
-        属性
+        {t("Properties")}
       </button>
-      {selectedCount > 0 && <span className="sel-hint">已选 {selectedCount}</span>}
+      {selectedCount > 0 && (
+        <span className="sel-hint">{t("{n} selected", { n: selectedCount })}</span>
+      )}
       <span className="spacer" />
       <button className="btn primary" onClick={onOpenAdd} disabled={!connected}>
-        添加种子…
+        {t("Add torrent…")}
       </button>
       <button className="btn" onClick={onOpenSettings} disabled={!connected}>
-        设置
+        {t("Settings")}
       </button>
       <button className="btn" onClick={onRefresh} disabled={!connected}>
-        刷新
+        {t("Refresh")}
       </button>
       <label className="chk">
         <input
@@ -66,7 +71,7 @@ export function Toolbar({
           checked={autoRefresh}
           onChange={(e) => onAutoRefreshChange(e.target.checked)}
         />
-        自动 {refreshMs / 1000}s
+        {t("Auto {n}s", { n: refreshMs / 1000 })}
       </label>
     </section>
   );

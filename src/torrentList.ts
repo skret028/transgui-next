@@ -18,18 +18,18 @@ export type SortDir = "asc" | "desc";
 
 export interface StatusFilter {
   id: string;
-  label: string;
+  labelKey: string;
   test: (t: Torrent) => boolean;
 }
 
 export const STATUS_FILTERS: StatusFilter[] = [
-  { id: "all", label: "全部", test: () => true },
-  { id: "active", label: "活动", test: (t) => t.rateDownload > 0 || t.rateUpload > 0 },
-  { id: "downloading", label: "下载中", test: (t) => t.status === 4 },
-  { id: "seeding", label: "做种中", test: (t) => t.status === 6 },
-  { id: "checking", label: "校验中", test: (t) => t.status === 2 },
-  { id: "stopped", label: "已停止", test: (t) => t.status === 0 },
-  { id: "error", label: "错误", test: (t) => t.error > 0 },
+  { id: "all", labelKey: "All", test: () => true },
+  { id: "active", labelKey: "Active", test: (t) => t.rateDownload > 0 || t.rateUpload > 0 },
+  { id: "downloading", labelKey: "Downloading", test: (t) => t.status === 4 },
+  { id: "seeding", labelKey: "Seeding", test: (t) => t.status === 6 },
+  { id: "checking", labelKey: "Checking", test: (t) => t.status === 2 },
+  { id: "stopped", labelKey: "Stopped", test: (t) => t.status === 0 },
+  { id: "error", labelKey: "Error", test: (t) => t.error > 0 },
 ];
 
 export interface FilterOptions {

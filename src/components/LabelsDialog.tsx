@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Modal } from "./Modal";
+import { useT } from "../i18n";
 
 interface Props {
   count: number;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function LabelsDialog({ count, current, known, onClose, onApply }: Props) {
+  const t = useT();
   const [text, setText] = useState(current.join(", "));
   const [busy, setBusy] = useState(false);
 
@@ -37,31 +39,31 @@ export function LabelsDialog({ count, current, known, onClose, onApply }: Props)
 
   return (
     <Modal
-      title={`设置标签（${count} 个种子）`}
+      title={t("Set labels ({n} torrents)", { n: count })}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            取消
+            {t("Cancel")}
           </button>
           <button className="btn primary" onClick={apply} disabled={busy}>
-            {busy ? "应用中…" : "应用"}
+            {busy ? t("Applying…") : t("Apply")}
           </button>
         </>
       }
     >
       <label className="field">
-        <span>标签（逗号分隔，留空清除）</span>
+        <span>{t("Labels (comma separated, blank clears)")}</span>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="电影, 剧集, 收藏"
+          placeholder={t("e.g. movies, shows, favorites")}
         />
       </label>
 
       {known.length > 0 && (
         <>
-          <div className="group">已有标签（点击切换）</div>
+          <div className="group">{t("Existing labels (click to toggle)")}</div>
           <div className="chips">
             {known.map((label) => (
               <button
@@ -76,7 +78,7 @@ export function LabelsDialog({ count, current, known, onClose, onApply }: Props)
         </>
       )}
 
-      <p className="muted">应用后会用上面的标签列表覆盖这些种子的现有标签。</p>
+      <p className="muted">{t("Applying will overwrite the current labels of these torrents.")}</p>
     </Modal>
   );
 }

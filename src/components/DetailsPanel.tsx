@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { FileStat, TorrentDetail } from "../types";
+import { useT } from "../i18n";
+import type { TFn } from "../format";
 import { formatBytes, formatDate, formatDuration, formatPercent, formatRatio, formatSpeed } from "../format";
 
 interface Props {
@@ -11,21 +13,26 @@ interface Props {
 
 type Tab = "info" | "files" | "peers" | "trackers";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "info", label: "常规" },
-  { id: "files", label: "文件" },
-  { id: "peers", label: "Peers" },
-  { id: "trackers", label: "追踪器" },
+const TABS: { id: Tab; labelKey: string }[] = [
+  { id: "info", labelKey: "General" },
+  { id: "files", labelKey: "Files" },
+  { id: "peers", labelKey: "Peers" },
+  { id: "trackers", labelKey: "Trackers" },
 ];
 
-const ANNOUNCE_STATE = ["未启用", "等待", "排队", "活动中"];
+const ANNOUNCE_KEY = [
+  "tracker.state.disabled",
+  "tracker.state.waiting",
+  "tracker.state.queued",
+  "tracker.state.active",
+];
 
-function filePriority(stat?: FileStat): string {
+function filePriority(stat: FileStat | undefined, t: TFn): string {
   if (!stat) return "-";
-  if (!stat.wanted) return "跳过";
-  if (stat.priority === 1) return "高";
-  if (stat.priority === -1) return "低";
-  return "普通";
+  if (!stat.wanted) return t("Skip");
+  if (stat.priority === 1) return t("High");
+  if (stat.priority === -1) return t("Low");
+  return t("Normal");
 }
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
@@ -38,12 +45,13 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
+  const t = useT();
   const [tab, setTab] = useState<Tab>("info");
 
   if (!detail) {
     return (
       <section className="details empty-details">
-        <span className="muted">双击列表中的种子查看详情</span>
+        <span className="muted">{t("Double-click a torrent to see details")}</span>
       </section>
     );
   }
@@ -57,16 +65,18 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
     <section className="details">
       <header className="details-head">
         <div className="details-tabs">
-          {TABS.map((t) => (
+          {TABS.map((item) => (
             <button
-              key={t.id}
-              className={`tab ${tab === t.id ? "active" : ""}`}
-              onClick={() => setTab(t.id)}
+              key={item.id}
+              className={`tab ${tab === item.id ? "active" : ""}`}
+              onClick={() => setTab(item.id)}
             >
-              {t.label}
-              {t.id === "files" && files.length > 0 && <span className="badge">{files.length}</span>}
-              {t.id === "peers" && peers.length > 0 && <span className="badge">{peers.length}</span>}
-              {t.id === "trackers" && trackers.length > 0 && <span className="badge">{trackers.length}</span>}
+              {t(item.labelKey)}
+              {item.id === "files" && files.length > 0 && <span className="badge">{files.length}</span>}
+              {item.id === "peers" && peers.length > 0 && <span className="badge">{peers.length}</span>}
+              {item.id === "trackers" && trackers.length > 0 && (
+                <span className="badge">{trackers.length}</span>
+              )}
             </button>
           ))}
         </div>
@@ -74,49 +84,52 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
           {detail.name}
         </span>
         <span className="spacer" />
-        {loading && <span className="muted">刷新中…</span>}
+        {loading && <span className="muted">{t("Refreshing…")}</span>}
         <button className="btn" onClick={onRefresh}>
-          刷新
+          {t("Refresh")}
         </button>
         <button className="btn" onClick={onClose}>
-          关闭
+          {t("Close")}
         </button>
       </header>
 
       <div className="details-body">
         {tab === "info" && (
           <div className="kv-grid">
-            <Row label="名称" value={detail.name} />
-            <Row label="哈希" value={<span className="mono">{detail.hashString}</span>} />
+            <Row label={t("Name")} value={detail.name} />
+            <Row label={t("Hash")} value={<span className="mono">{detail.hashString}</span>} />
             <Row
-              label="大小"
-              value={`${formatBytes(detail.totalSize)} （已下 ${formatBytes(detail.downloadedEver)} / 已上 ${formatBytes(detail.uploadedEver)}）`}
+              label={t("Size")}
+              value={t("{size} (downloaded {down} / uploaded {up})", {
+                size: formatBytes(detail.totalSize),
+                down: formatBytes(detail.downloadedEver),
+                up: formatBytes(detail.uploadedEver),
+              })}
             />
-            <Row label="比率" value={formatRatio(detail.uploadRatio)} />
-            <Row label="下载目录" value={<span className="mono">{detail.downloadDir}</span>} />
-            <Row label="添加时间" value={formatDate(detail.addedDate)} />
-            <Row label="完成时间" value={detail.doneDate > 0 ? formatDate(detail.doneDate) : "-"} />
-            <Row label="上次活动" value={formatDate(detail.activityDate)} />
+            <Row label={t("Ratio")} value={formatRatio(detail.uploadRatio)} />
+            <Row label={t("Download directory")} value={<span className="mono">{detail.downloadDir}</span>} />
+            <Row label={t("Added")} value={formatDate(detail.addedDate)} />
+            <Row label={t("Completed")} value={detail.doneDate > 0 ? formatDate(detail.doneDate) : "-"} />
+            <Row label={t("Last activity")} value={formatDate(detail.activityDate)} />
             <Row
-              label="下载/做种时长"
-              value={`${formatDuration(detail.secondsDownloading)} / ${formatDuration(detail.secondsSeeding)}`}
+              label={t("Downloaded / seeded time")}
+              value={`${formatDuration(detail.secondsDownloading, t)} / ${formatDuration(detail.secondsSeeding, t)}`}
+            />
+            <Row label={t("Pieces")} value={`${detail.pieceCount} × ${formatBytes(detail.pieceSize)}`} />
+            <Row
+              label={t("Speed limits")}
+              value={`↓ ${detail.downloadLimited ? formatSpeed(detail.downloadLimit) : t("Unlimited")} · ↑ ${
+                detail.uploadLimited ? formatSpeed(detail.uploadLimit) : t("Unlimited")
+              }`}
             />
             <Row
-              label="片段"
-              value={`${detail.pieceCount} × ${formatBytes(detail.pieceSize)}`}
+              label={t("Seed ratio goal")}
+              value={detail.seedRatioMode === 1 ? formatRatio(detail.seedRatioLimit) : t("Global")}
             />
-            <Row
-              label="限速"
-              value={`↓ ${detail.downloadLimited ? formatSpeed(detail.downloadLimit) : "不限"} · ↑ ${detail.uploadLimited ? formatSpeed(detail.uploadLimit) : "不限"}`}
-            />
-            <Row
-              label="做种目标"
-              value={detail.seedRatioMode === 1 ? formatRatio(detail.seedRatioLimit) : "全局"}
-            />
-            <Row label="私有种子" value={detail.isPrivate ? "是" : "否"} />
-            <Row label="创建者" value={detail.creator || "-"} />
-            <Row label="备注" value={detail.comment || "-"} />
-            <Row label="Magnet" value={<span className="mono ellipsis">{detail.magnetLink}</span>} />
+            <Row label={t("Private torrent")} value={detail.isPrivate ? t("Yes") : t("No")} />
+            <Row label={t("Creator")} value={detail.creator || "-"} />
+            <Row label={t("Comment")} value={detail.comment || "-"} />
+            <Row label={t("Magnet")} value={<span className="mono ellipsis">{detail.magnetLink}</span>} />
           </div>
         )}
 
@@ -124,17 +137,17 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
           <table className="sub-table">
             <thead>
               <tr>
-                <th>文件</th>
-                <th className="num">大小</th>
-                <th className="col-prog">完成</th>
-                <th>优先级</th>
+                <th>{t("File")}</th>
+                <th className="num">{t("Size")}</th>
+                <th className="col-prog">{t("Done")}</th>
+                <th>{t("Priority")}</th>
               </tr>
             </thead>
             <tbody>
               {files.length === 0 && (
                 <tr>
                   <td className="empty" colSpan={4}>
-                    无文件信息
+                    {t("No file information")}
                   </td>
                 </tr>
               )}
@@ -152,7 +165,7 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
                         <span className="prog-text">{formatPercent(done)}</span>
                       </div>
                     </td>
-                    <td>{filePriority(fileStats[i])}</td>
+                    <td>{filePriority(fileStats[i], t)}</td>
                   </tr>
                 );
               })}
@@ -164,19 +177,19 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
           <table className="sub-table">
             <thead>
               <tr>
-                <th>地址</th>
-                <th>客户端</th>
-                <th>标志</th>
-                <th className="col-prog">进度</th>
-                <th className="num">下载</th>
-                <th className="num">上传</th>
+                <th>{t("Address")}</th>
+                <th>{t("Client")}</th>
+                <th>{t("Flags")}</th>
+                <th className="col-prog">{t("Progress")}</th>
+                <th className="num">{t("Download")}</th>
+                <th className="num">{t("Upload")}</th>
               </tr>
             </thead>
             <tbody>
               {peers.length === 0 && (
                 <tr>
                   <td className="empty" colSpan={6}>
-                    无连接中的 peer
+                    {t("No connected peers")}
                   </td>
                 </tr>
               )}
@@ -203,31 +216,31 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
           <table className="sub-table">
             <thead>
               <tr>
-                <th>追踪器</th>
-                <th>状态</th>
-                <th className="num">种子</th>
-                <th className="num">下载</th>
-                <th>最近结果</th>
+                <th>{t("Tracker")}</th>
+                <th>{t("Status")}</th>
+                <th className="num">{t("Seeds")}</th>
+                <th className="num">{t("Leechers")}</th>
+                <th>{t("Last result")}</th>
               </tr>
             </thead>
             <tbody>
               {trackers.length === 0 && (
                 <tr>
                   <td className="empty" colSpan={5}>
-                    无追踪器信息
+                    {t("No tracker information")}
                   </td>
                 </tr>
               )}
-              {trackers.map((t, i) => (
+              {trackers.map((tr, i) => (
                 <tr key={i}>
-                  <td className="mono ellipsis" title={t.announce}>
-                    {t.host || t.announce}
+                  <td className="mono ellipsis" title={tr.announce}>
+                    {tr.host || tr.announce}
                   </td>
-                  <td>{ANNOUNCE_STATE[t.announceState] ?? "?"}</td>
-                  <td className="num">{t.seederCount}</td>
-                  <td className="num">{t.leecherCount}</td>
-                  <td className={t.lastAnnounceSucceeded ? "up" : "down"}>
-                    {t.lastAnnounceResult || "-"}
+                  <td>{ANNOUNCE_KEY[tr.announceState] ? t(ANNOUNCE_KEY[tr.announceState]) : "?"}</td>
+                  <td className="num">{tr.seederCount}</td>
+                  <td className="num">{tr.leecherCount}</td>
+                  <td className={tr.lastAnnounceSucceeded ? "up" : "down"}>
+                    {tr.lastAnnounceResult || "-"}
                   </td>
                 </tr>
               ))}

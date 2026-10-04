@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Modal } from "./Modal";
+import { useT } from "../i18n";
 import type { AddTorrentOptions } from "../types";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function AddTorrentDialog({ onClose, onSubmit, defaultPaused = false }: Props) {
+  const t = useT();
   const [source, setSource] = useState("");
   const [file, setFile] = useState("");
   const [dir, setDir] = useState("");
@@ -52,56 +54,60 @@ export function AddTorrentDialog({ onClose, onSubmit, defaultPaused = false }: P
 
   return (
     <Modal
-      title="添加种子"
+      title={t("Add torrent")}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            取消
+            {t("Cancel")}
           </button>
           <button className="btn primary" onClick={submit} disabled={busy || !canSubmit}>
-            {busy ? "添加中…" : "添加"}
+            {busy ? t("Adding…") : t("Add")}
           </button>
         </>
       }
     >
       <label className="field">
-        <span>磁力链接 / URL</span>
+        <span>{t("Magnet link / URL")}</span>
         <input
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          placeholder="magnet:?xt=… 或 http(s)://…"
+          placeholder="magnet:?xt=… / http(s)://…"
         />
       </label>
 
       <div className="field">
-        <span>或本地 .torrent 文件</span>
+        <span>{t("Or a local .torrent file")}</span>
         <div className="row">
-          <input value={file} readOnly placeholder="（未选择）" />
+          <input value={file} readOnly placeholder={t("(none selected)")} />
           <button className="btn" onClick={pickFile}>
-            选择…
+            {t("Choose…")}
           </button>
           {file && (
             <button className="btn" onClick={() => setFile("")}>
-              清除
+              {t("Clear")}
             </button>
           )}
         </div>
       </div>
 
       <label className="field">
-        <span>下载目录（留空用服务器默认）</span>
+        <span>{t("Download directory (blank = server default)")}</span>
         <input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="/downloads" />
       </label>
 
       <label className="field">
-        <span>标签（逗号分隔）</span>
-        <input value={labels} onChange={(e) => setLabels(e.target.value)} placeholder="电影, 剧集" />
+        <span>{t("Labels (comma separated)")}</span>
+        <input
+          value={labels}
+          onChange={(e) => setLabels(e.target.value)}
+          placeholder={t("e.g. movies, shows")}
+        />
       </label>
 
       <label className="chk">
         <input type="checkbox" checked={paused} onChange={(e) => setPaused(e.target.checked)} />
-        添加后暂停（不自动开始）
+        {t("Add paused (do not start)")}
       </label>
     </Modal>
   );

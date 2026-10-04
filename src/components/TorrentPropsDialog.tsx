@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
+import { useT } from "../i18n";
 import type { TorrentDetail } from "../types";
 
 interface Props {
@@ -56,6 +57,7 @@ function toPatch(f: Fields): Record<string, unknown> {
 }
 
 export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
+  const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -66,7 +68,7 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
       try {
         const d = await onLoad(id);
         if (!d) {
-          setError("读取种子属性失败");
+          setError(t("Failed to read torrent properties"));
           return;
         }
         setName(d.name);
@@ -75,6 +77,7 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
         setError(String(e));
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, onLoad]);
 
   const set = <K extends keyof Fields>(key: K, value: Fields[K]) =>
@@ -95,34 +98,34 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
 
   return (
     <Modal
-      title={`种子属性${name ? `：${name}` : ""}`}
+      title={`${t("Torrent properties")}${name ? `: ${name}` : ""}`}
       width={520}
       onClose={onClose}
       footer={
         <>
           <span className="spacer" />
           <button className="btn" onClick={onClose}>
-            关闭
+            {t("Close")}
           </button>
           <button className="btn primary" onClick={apply} disabled={busy || !fields}>
-            {busy ? "应用中…" : "应用"}
+            {busy ? t("Applying…") : t("Apply")}
           </button>
         </>
       }
     >
       {error && <div className="error inline">{error}</div>}
-      {!fields && !error && <div className="muted">加载中…</div>}
+      {!fields && !error && <div className="muted">{t("Loading…")}</div>}
 
       {fields && (
         <div className="settings-form">
-          <div className="group">速度限制（KB/s）</div>
+          <div className="group">{t("Speed limits (KB/s)")}</div>
           <label className="chk">
             <input
               type="checkbox"
               checked={fields.honorsSession}
               onChange={(e) => set("honorsSession", e.target.checked)}
             />
-            遵循全局速度限制
+            {t("Honor global speed limits")}
           </label>
           <div className="kv-inline">
             <label className="chk">
@@ -131,7 +134,7 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
                 checked={fields.downEnabled}
                 onChange={(e) => set("downEnabled", e.target.checked)}
               />
-              下载限速
+              {t("Download limit")}
             </label>
             <input
               className="narrow"
@@ -145,7 +148,7 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
                 checked={fields.upEnabled}
                 onChange={(e) => set("upEnabled", e.target.checked)}
               />
-              上传限速
+              {t("Upload limit")}
             </label>
             <input
               className="narrow"
@@ -155,17 +158,17 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
             />
           </div>
 
-          <div className="group">优先级与队列</div>
+          <div className="group">{t("Priority and queue")}</div>
           <label className="field">
-            <span>带宽优先级</span>
+            <span>{t("Bandwidth priority")}</span>
             <select value={fields.priority} onChange={(e) => set("priority", e.target.value)}>
-              <option value="-1">低</option>
-              <option value="0">普通</option>
-              <option value="1">高</option>
+              <option value="-1">{t("Low")}</option>
+              <option value="0">{t("Normal")}</option>
+              <option value="1">{t("High")}</option>
             </select>
           </label>
           <label className="field">
-            <span>队列位置（0 = 队首）</span>
+            <span>{t("Queue position (0 = first)")}</span>
             <input
               className="narrow-wide"
               value={fields.queuePos}
@@ -173,17 +176,17 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
             />
           </label>
 
-          <div className="group">做种比率</div>
+          <div className="group">{t("Seed ratio")}</div>
           <label className="field">
-            <span>模式</span>
+            <span>{t("Mode")}</span>
             <select value={fields.ratioMode} onChange={(e) => set("ratioMode", e.target.value)}>
-              <option value="0">使用全局</option>
-              <option value="1">自定义</option>
-              <option value="2">不限制</option>
+              <option value="0">{t("Use global")}</option>
+              <option value="1">{t("Custom")}</option>
+              <option value="2">{t("Unlimited")}</option>
             </select>
           </label>
           <label className="field">
-            <span>比率上限</span>
+            <span>{t("Ratio limit")}</span>
             <input
               className="narrow-wide"
               value={fields.ratioLimit}

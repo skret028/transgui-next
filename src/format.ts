@@ -1,19 +1,18 @@
 // Presentation helpers for Transmission torrent data.
 
-/** Transmission `status` enum -> 中文标签. */
-export const STATUS_TEXT: Record<number, string> = {
-  0: "已停止",
-  1: "排队校验",
-  2: "校验中",
-  3: "排队下载",
-  4: "下载中",
-  5: "排队做种",
-  6: "做种中",
+/** Transmission `status` enum -> i18n key (translated by the caller). */
+export const STATUS_KEY: Record<number, string> = {
+  0: "Stopped",
+  1: "Queued to check",
+  2: "Checking",
+  3: "Queued to download",
+  4: "Downloading",
+  5: "Queued to seed",
+  6: "Seeding",
 };
 
-export function statusText(t: { status: number; isStalled?: boolean }): string {
-  const base = STATUS_TEXT[t.status] ?? `#${t.status}`;
-  return t.isStalled ? `${base} (卡住)` : base;
+export function statusKey(t: { status: number }): string {
+  return STATUS_KEY[t.status] ?? `#${t.status}`;
 }
 
 export function statusClass(status: number): string {
@@ -52,21 +51,23 @@ export function formatRatio(r: number | undefined | null): string {
 }
 
 /** Transmission sends -1 (no estimate) / -2 (unknown) for eta. */
-export function formatEta(seconds: number | undefined | null): string {
+export function formatEta(seconds: number | undefined | null, t: TFn): string {
   if (seconds == null || seconds < 0) return "-";
-  return formatDuration(seconds);
+  return formatDuration(seconds, t);
 }
 
-export function formatDuration(seconds: number): string {
+export type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+export function formatDuration(seconds: number, t: TFn): string {
   if (!Number.isFinite(seconds)) return "-";
   const s = Math.floor(seconds % 60);
   const m = Math.floor((seconds / 60) % 60);
   const h = Math.floor((seconds / 3600) % 24);
   const d = Math.floor(seconds / 86400);
-  if (d > 0) return `${d}天 ${h}时`;
-  if (h > 0) return `${h}时 ${m}分`;
-  if (m > 0) return `${m}分 ${s}秒`;
-  return `${s}秒`;
+  if (d > 0) return t("dur.day_hour", { d, h });
+  if (h > 0) return t("dur.hour_min", { h, m });
+  if (m > 0) return t("dur.min_sec", { m, s });
+  return t("dur.sec", { s });
 }
 
 export function formatPercent(p: number | undefined | null): string {

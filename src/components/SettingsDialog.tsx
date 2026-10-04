@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
+import { useT } from "../i18n";
 import type { SessionInfo } from "../types";
 
 interface Props {
@@ -91,6 +92,7 @@ function toPatch(f: Fields): Record<string, unknown> {
 }
 
 export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
+  const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -123,33 +125,33 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
 
   return (
     <Modal
-      title="服务器 / 传输设置"
+      title={t("Server / transfer settings")}
       width={540}
       onClose={onClose}
       footer={
         <>
           <span className="spacer" />
           <button className="btn" onClick={onClose}>
-            关闭
+            {t("Close")}
           </button>
           <button className="btn primary" onClick={apply} disabled={busy || !fields}>
-            {busy ? "应用中…" : "应用"}
+            {busy ? t("Applying…") : t("Apply")}
           </button>
         </>
       }
     >
       {error && <div className="error inline">{error}</div>}
-      {!fields && !error && <div className="muted">加载中…</div>}
+      {!fields && !error && <div className="muted">{t("Loading…")}</div>}
 
       {fields && (
         <div className="settings-form">
-          <div className="group">目录</div>
+          <div className="group">{t("Directories")}</div>
           <label className="field">
-            <span>默认下载目录</span>
+            <span>{t("Default download directory")}</span>
             <input value={fields.downloadDir} onChange={(e) => set("downloadDir", e.target.value)} />
           </label>
           <label className="field">
-            <span>未完成目录</span>
+            <span>{t("Incomplete directory")}</span>
             <input
               value={fields.incompleteDir}
               onChange={(e) => set("incompleteDir", e.target.value)}
@@ -162,10 +164,10 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
               checked={fields.incompleteDirEnabled}
               onChange={(e) => set("incompleteDirEnabled", e.target.checked)}
             />
-            启用未完成目录
+            {t("Enable incomplete directory")}
           </label>
 
-          <div className="group">速度限制（KB/s）</div>
+          <div className="group">{t("Speed limits (KB/s)")}</div>
           <div className="kv-inline">
             <label className="chk">
               <input
@@ -173,7 +175,7 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
                 checked={fields.speedDownEnabled}
                 onChange={(e) => set("speedDownEnabled", e.target.checked)}
               />
-              下载限速
+              {t("Download limit")}
             </label>
             <input
               className="narrow"
@@ -186,7 +188,7 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
                 checked={fields.speedUpEnabled}
                 onChange={(e) => set("speedUpEnabled", e.target.checked)}
               />
-              上传限速
+              {t("Upload limit")}
             </label>
             <input
               className="narrow"
@@ -195,25 +197,25 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
             />
           </div>
 
-          <div className="group">备选限速（夜间/忙时）</div>
+          <div className="group">{t("Alternative speed limits (night/busy)")}</div>
           <label className="chk">
             <input
               type="checkbox"
               checked={fields.altEnabled}
               onChange={(e) => set("altEnabled", e.target.checked)}
             />
-            启用备选限速
+            {t("Enable alternative speed limits")}
           </label>
           <div className="kv-inline">
-            <span className="muted">下载</span>
+            <span className="muted">{t("Download")}</span>
             <input className="narrow" value={fields.altDown} onChange={(e) => set("altDown", e.target.value)} />
-            <span className="muted">上传</span>
+            <span className="muted">{t("Upload")}</span>
             <input className="narrow" value={fields.altUp} onChange={(e) => set("altUp", e.target.value)} />
           </div>
 
-          <div className="group">网络</div>
+          <div className="group">{t("Network")}</div>
           <div className="kv-inline">
-            <span className="muted">监听端口</span>
+            <span className="muted">{t("Listening port")}</span>
             <input className="narrow" value={fields.peerPort} onChange={(e) => set("peerPort", e.target.value)} />
             <label className="chk">
               <input
@@ -221,15 +223,15 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
                 checked={fields.peerPortRandom}
                 onChange={(e) => set("peerPortRandom", e.target.checked)}
               />
-              启动时随机
+              {t("Randomize on start")}
             </label>
           </div>
           <label className="field">
-            <span>加密</span>
+            <span>{t("Encryption")}</span>
             <select value={fields.encryption} onChange={(e) => set("encryption", e.target.value)}>
-              <option value="preferred">优先</option>
-              <option value="required">必须</option>
-              <option value="tolerated">允许</option>
+              <option value="preferred">{t("Preferred")}</option>
+              <option value="required">{t("Required")}</option>
+              <option value="tolerated">{t("Tolerated")}</option>
             </select>
           </label>
           <div className="kv-inline">
@@ -251,14 +253,14 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
             </label>
           </div>
 
-          <div className="group">行为</div>
+          <div className="group">{t("Behavior")}</div>
           <label className="chk">
             <input
               type="checkbox"
               checked={fields.startAdded}
               onChange={(e) => set("startAdded", e.target.checked)}
             />
-            添加种子后自动开始
+            {t("Start added torrents automatically")}
           </label>
           <label className="chk">
             <input
@@ -266,7 +268,7 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
               checked={fields.renamePartial}
               onChange={(e) => set("renamePartial", e.target.checked)}
             />
-            未完成文件加 .part 后缀
+            {t("Append .part to incomplete files")}
           </label>
           <div className="kv-inline">
             <label className="chk">
@@ -275,7 +277,7 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
                 checked={fields.seedRatioLimited}
                 onChange={(e) => set("seedRatioLimited", e.target.checked)}
               />
-              做种比率限制
+              {t("Seed ratio limit")}
             </label>
             <input
               className="narrow"

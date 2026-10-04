@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from "react";
+import { useT } from "../i18n";
 
 interface Props {
   title: string;
@@ -10,6 +11,8 @@ interface Props {
 
 /** Minimal modal shell used by the dialog components. */
 export function Modal({ title, children, footer, onClose, width = 470 }: Props) {
+  const t = useT();
+
   // Esc closes the dialog.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -24,7 +27,7 @@ export function Modal({ title, children, footer, onClose, width = 470 }: Props) 
       <div className="modal" style={{ width }} onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <span className="modal-title">{title}</span>
-          <button className="btn icon" onClick={onClose} aria-label="关闭">
+          <button className="btn icon" onClick={onClose} aria-label={t("Close")}>
             ✕
           </button>
         </header>

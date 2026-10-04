@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ConnForm, ServerBookmark } from "../types";
+import { useT } from "../i18n";
 
 interface Props {
   form: ConnForm;
@@ -28,6 +29,7 @@ export function ConnectionBar({
   onSaveServer,
   onDeleteServer,
 }: Props) {
+  const t = useT();
   const locked = connected;
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -50,9 +52,9 @@ export function ConnectionBar({
         value={selectedServerId}
         onChange={(e) => onSelectServer(e.target.value)}
         disabled={locked}
-        title="已保存的服务器"
+        title={t("Saved servers")}
       >
-        <option value="">（选择服务器…）</option>
+        <option value="">{t("(select a server…)")}</option>
         {servers.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}
@@ -67,28 +69,28 @@ export function ConnectionBar({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && confirmSave()}
-            placeholder="服务器名称"
+            placeholder={t("Server name")}
             autoFocus
           />
           <button className="btn primary" onClick={confirmSave}>
-            保存
+            {t("Save")}
           </button>
           <button className="btn" onClick={() => setNaming(false)}>
-            取消
+            {t("Cancel")}
           </button>
         </>
       ) : (
         <>
-          <button className="btn" onClick={startSave} title="把当前连接存为书签">
-            存为…
+          <button className="btn" onClick={startSave} title={t("Bookmark the current connection")}>
+            {t("Bookmark…")}
           </button>
           <button
             className="btn"
             onClick={() => onDeleteServer(selectedServerId)}
             disabled={!selectedServerId}
-            title="删除选中的服务器"
+            title={t("Delete the selected server")}
           >
-            删除
+            {t("Delete")}
           </button>
         </>
       )}
@@ -99,27 +101,27 @@ export function ConnectionBar({
         className="mono"
         value={form.host}
         onChange={(e) => onChange("host", e.target.value)}
-        placeholder="主机"
+        placeholder={t("Host")}
         disabled={locked}
       />
       <input
         className="narrow"
         value={form.port}
         onChange={(e) => onChange("port", e.target.value)}
-        placeholder="端口"
+        placeholder={t("Port")}
         disabled={locked}
       />
       <input
         value={form.username}
         onChange={(e) => onChange("username", e.target.value)}
-        placeholder="用户名"
+        placeholder={t("Username")}
         disabled={locked}
       />
       <input
         type="password"
         value={form.password}
         onChange={(e) => onChange("password", e.target.value)}
-        placeholder="密码"
+        placeholder={t("Password")}
         disabled={locked}
       />
       <label className="chk">
@@ -133,11 +135,11 @@ export function ConnectionBar({
       </label>
       {connected ? (
         <button className="btn danger" onClick={onDisconnect}>
-          断开
+          {t("Disconnect")}
         </button>
       ) : (
         <button className="btn primary" onClick={onConnect} disabled={connecting}>
-          {connecting ? "连接中…" : "连接"}
+          {connecting ? t("Connecting…") : t("Connect")}
         </button>
       )}
     </section>

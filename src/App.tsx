@@ -3,7 +3,15 @@ import type { MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import "./App.css";
 import { rpc } from "./api";
-import { DEFAULT_FORM, loadConnForm, loadServers, saveConnForm, saveServers } from "./settings";
+import {
+  DEFAULT_FORM,
+  loadConnForm,
+  loadLocale,
+  loadServers,
+  saveConnForm,
+  saveLocale,
+  saveServers,
+} from "./settings";
 import {
   filterTorrents,
   nextDir,
@@ -13,6 +21,14 @@ import {
   type SortKey,
 } from "./torrentList";
 import type { AddTorrentOptions, ConnForm, ServerBookmark, Torrent, TorrentDetail } from "./types";
+import {
+  availableLocales,
+  DEFAULT_LOCALE,
+  I18nProvider,
+  normalizeLocale,
+  useI18n,
+  useT,
+} from "./i18n";
 import { ConnectionBar } from "./components/ConnectionBar";
 import { Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
@@ -24,7 +40,9 @@ import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
 
 const REFRESH_MS = 2000;
 
-function App() {
+function AppInner() {
+  const t = useT();
+  const { locale, setLocale } = useI18n();
   const [form, setForm] = useState<ConnForm>(DEFAULT_FORM);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -69,13 +87,13 @@ function App() {
 
   const knownLabels = useMemo(() => {
     const set = new Set<string>();
-    for (const t of torrents) for (const l of t.labels ?? []) set.add(l);
+    for (const x of torrents) for (const l of x.labels ?? []) set.add(l);
     return [...set].sort();
   }, [torrents]);
 
   const selectedLabels = useMemo(() => {
     const set = new Set<string>();
-    for (const t of torrents) if (selection.has(t.id)) for (const l of t.labels ?? []) set.add(l);
+    for (const x of torrents) if (selection.has(x.id)) for (const l of x.labels ?? []) set.add(l);
     return [...set].sort();
   }, [torrents, selection]);
 
@@ -175,7 +193,7 @@ function App() {
         });
         anchor.current = id;
       } else if (e.shiftKey && anchor.current != null) {
-        const ids = visible.map((t) => t.id);
+        const ids = visible.map((x) => x.id);
         const i0 = ids.indexOf(anchor.current);
         const i1 = ids.indexOf(id);
         if (i0 >= 0 && i1 >= 0) {
@@ -200,8 +218,8 @@ function App() {
   };
 
   const toggleAll = () => {
-    const allSelected = visible.length > 0 && visible.every((t) => selection.has(t.id));
-    setSelection(allSelected ? new Set() : new Set(visible.map((t) => t.id)));
+    const allSelected = visible.length > 0 && visible.every((x) => selection.has(x.id));
+    setSelection(allSelected ? new Set() : new Set(visible.map((x) => x.id)));
   };
 
   const openDetails = useCallback(
@@ -216,7 +234,7 @@ function App() {
     async (act: string) => {
       const ids = [...selection];
       if (ids.length === 0) {
-        setError("先在列表里选中种子");
+        setError(t("Select a torrent in the list first"));
         return;
       }
       try {
@@ -227,7 +245,7 @@ function App() {
         setError(String(e));
       }
     },
-    [selection, refresh, refreshDetail],
+    [selection, refresh, refreshDetail, t],
   );
 
   const submitAdd = useCallback(
@@ -295,7 +313,7 @@ function App() {
             setDragging(false);
             const torrents = p.paths.filter((x) => x.toLowerCase().endsWith(".torrent"));
             if (torrents.length === 0) {
-              setError("只支持拖入 .torrent 文件");
+              setError(t("Only .torrent files can be dropped"));
               return;
             }
             void (async () => {
@@ -317,7 +335,7 @@ function App() {
       }
     })();
     return () => unlisten?.();
-  }, [refresh]);
+  }, [refresh, t]);
 
   // Keep an open details panel following the current selection.
   useEffect(() => {
@@ -371,17 +389,32 @@ function App() {
 
   return (
     <div className="app">
-      {dragging && <div className="drop-overlay">松开以添加 .torrent 文件</div>}
+      {dragging && <div className="drop-overlay">{t("Drop to add a .torrent file")}</div>}
       <header className="topbar">
         <span className="brand">transgui-next</span>
         <span className={`dot ${connected ? "on" : "off"}`} />
-        <span className="conn-state">{connected ? `已连接 · ${version}` : "未连接"}</span>
+        <span className="conn-state">
+          {connected ? `${t("Connected")} · ${version}` : t("Not connected")}
+        </span>
         <span className="spacer" />
+        <select
+          className="filter-status locale-select"
+          value={locale}
+          onChange={(e) => setLocale(e.target.value)}
+          title={t("Language")}
+          aria-label={t("Language")}
+        >
+          {availableLocales().map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
         <input
           className="filter"
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
-          placeholder="筛选 名称 / 标签 / 哈希"
+          placeholder={t("Filter name / label / hash")}
           disabled={!connected}
         />
         <select
@@ -392,7 +425,7 @@ function App() {
         >
           {STATUS_FILTERS.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.label}
+              {t(s.labelKey)}
             </option>
           ))}
         </select>
@@ -456,12 +489,14 @@ function App() {
 
       <footer className="statusbar">
         <span>
-          共 {torrents.length} 个种子
-          {visible.length !== torrents.length ? ` · 筛选出 ${visible.length}` : ""}
+          {t("{n} torrents", { n: torrents.length })}
+          {visible.length !== torrents.length
+            ? ` · ${t("{n} shown", { n: visible.length })}`
+            : ""}
         </span>
-        {selection.size > 0 && <span>选中 {selection.size}</span>}
+        {selection.size > 0 && <span>{t("{n} selected", { n: selection.size })}</span>}
         <span className="spacer" />
-        {lastUpdate && <span>更新于 {lastUpdate.toLocaleTimeString()}</span>}
+        {lastUpdate && <span>{t("Updated {time}", { time: lastUpdate.toLocaleTimeString() })}</span>}
       </footer>
 
       {showAdd && (
@@ -495,6 +530,28 @@ function App() {
         />
       )}
     </div>
+  );
+}
+
+function App() {
+  const [locale, setLocale] = useState(DEFAULT_LOCALE);
+
+  useEffect(() => {
+    void (async () => {
+      const saved = await loadLocale();
+      if (saved) setLocale(normalizeLocale(saved));
+    })();
+  }, []);
+
+  const changeLocale = useCallback((code: string) => {
+    setLocale(code);
+    void saveLocale(code);
+  }, []);
+
+  return (
+    <I18nProvider locale={locale} onLocaleChange={changeLocale}>
+      <AppInner />
+    </I18nProvider>
   );
 }
 

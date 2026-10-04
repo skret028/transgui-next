@@ -59,3 +59,20 @@ export async function saveServers(list: ServerBookmark[]): Promise<void> {
   await store.set(SERVERS_KEY, list);
   await store.save();
 }
+
+const LOCALE_KEY = "locale";
+
+export async function loadLocale(): Promise<string | undefined> {
+  try {
+    const store = await getStore();
+    return (await store.get<string>(LOCALE_KEY)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function saveLocale(code: string): Promise<void> {
+  const store = await getStore();
+  await store.set(LOCALE_KEY, code);
+  await store.save();
+}
