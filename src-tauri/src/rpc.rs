@@ -237,6 +237,77 @@ pub async fn rpc_torrents(state: State<'_, AppState>) -> Result<Value, String> {
     Ok(res.get("torrents").cloned().unwrap_or_else(|| json!([])))
 }
 
+/// Fields needed for the details panel (files / peers / trackers / metadata).
+/// Superset of TORRENT_FIELDS so a detail record also satisfies `Torrent`.
+const DETAIL_FIELDS: &[&str] = &[
+    "id",
+    "name",
+    "hashString",
+    "status",
+    "totalSize",
+    "sizeWhenDone",
+    "leftUntilDone",
+    "percentDone",
+    "rateDownload",
+    "rateUpload",
+    "peersConnected",
+    "peersSendingToUs",
+    "peersGettingFromUs",
+    "queuePosition",
+    "recheckProgress",
+    "isFinished",
+    "isStalled",
+    "error",
+    "errorString",
+    "comment",
+    "creator",
+    "dateCreated",
+    "downloadDir",
+    "isPrivate",
+    "magnetLink",
+    "pieceCount",
+    "pieceSize",
+    "addedDate",
+    "doneDate",
+    "activityDate",
+    "startDate",
+    "secondsDownloading",
+    "secondsSeeding",
+    "uploadedEver",
+    "downloadedEver",
+    "corruptEver",
+    "haveValid",
+    "haveUnchecked",
+    "eta",
+    "uploadRatio",
+    "seedRatioLimit",
+    "seedRatioMode",
+    "downloadLimit",
+    "uploadLimit",
+    "downloadLimited",
+    "uploadLimited",
+    "bandwidthPriority",
+    "honorsSessionLimits",
+    "labels",
+    "files",
+    "fileStats",
+    "peers",
+    "peersFrom",
+    "trackers",
+    "trackerStats",
+];
+
+/// Fetch detailed records for the given torrent ids.
+#[tauri::command]
+pub async fn rpc_torrent_details(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<Value, String> {
+    let args = json!({ "ids": ids, "fields": DETAIL_FIELDS });
+    let res = rpc_call(state.inner(), "torrent-get", args).await?;
+    Ok(res.get("torrents").cloned().unwrap_or_else(|| json!([])))
+}
+
 /// Map a UI action to a Transmission method and call it.
 #[tauri::command]
 pub async fn rpc_torrent_action(
@@ -331,6 +402,31 @@ mod tests {
                 t["name"],
                 t["status"],
                 t["percentDone"].as_f64().unwrap_or(0.0),
+            );
+        }
+
+        // Details path (files / peers / trackers) must return the nested arrays.
+        if let Some(first) = torrents.first() {
+            let id = first["id"].as_i64().expect("torrent id");
+            let dres = rpc_call(
+                &state,
+                "torrent-get",
+                json!({ "ids": [id], "fields": DETAIL_FIELDS }),
+            )
+            .await
+            .expect("torrent-get details");
+            let d = &dres["torrents"][0];
+            println!(
+                "detail #{id}: files={} peers={} trackers={} dir={:?}",
+                d["files"].as_array().map(|a| a.len()).unwrap_or(0),
+                d["peers"].as_array().map(|a| a.len()).unwrap_or(0),
+                d["trackerStats"].as_array().map(|a| a.len()).unwrap_or(0),
+                d["downloadDir"],
+            );
+            assert!(d["files"].is_array(), "files array missing in details");
+            assert!(
+                d["trackerStats"].is_array(),
+                "trackerStats array missing in details"
             );
         }
     }

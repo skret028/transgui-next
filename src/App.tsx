@@ -1,85 +1,62 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import "./App.css";
+import { rpc } from "./api";
+import { DEFAULT_FORM, loadConnForm, saveConnForm } from "./settings";
 import {
-  formatBytes,
-  formatEta,
-  formatPercent,
-  formatRatio,
-  formatSpeed,
-  statusClass,
-  statusText,
-} from "./format";
-
-interface Torrent {
-  id: number;
-  name: string;
-  status: number;
-  totalSize: number;
-  sizeWhenDone: number;
-  percentDone: number;
-  rateDownload: number;
-  rateUpload: number;
-  uploadRatio: number;
-  eta: number;
-  uploadedEver: number;
-  downloadedEver: number;
-  labels?: string[];
-  peersConnected: number;
-  peersSendingToUs: number;
-  peersGettingFromUs: number;
-  queuePosition: number;
-  error: number;
-  errorString: string;
-  hashString: string;
-  downloadDir: string;
-  isFinished: boolean;
-  isStalled: boolean;
-  addedDate: number;
-}
-
-interface ConnForm {
-  host: string;
-  port: string;
-  path: string;
-  username: string;
-  password: string;
-  https: boolean;
-  acceptInvalid: boolean;
-}
-
-interface ConnectResult {
-  version: string;
-  rpcVersion: number;
-}
+  filterTorrents,
+  nextDir,
+  sortTorrents,
+  STATUS_FILTERS,
+  type SortDir,
+  type SortKey,
+} from "./torrentList";
+import type { ConnForm, Torrent, TorrentDetail } from "./types";
+import { ConnectionBar } from "./components/ConnectionBar";
+import { Toolbar } from "./components/Toolbar";
+import { TorrentTable } from "./components/TorrentTable";
+import { DetailsPanel } from "./components/DetailsPanel";
 
 const REFRESH_MS = 2000;
 
 function App() {
-  const [form, setForm] = useState<ConnForm>({
-    host: "localhost",
-    port: "19091",
-    path: "/transmission/rpc",
-    username: "admin",
-    password: "admin",
-    https: false,
-    acceptInvalid: false,
-  });
+  const [form, setForm] = useState<ConnForm>(DEFAULT_FORM);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [serverVersion, setServerVersion] = useState("");
+  const [version, setVersion] = useState("");
   const [error, setError] = useState("");
   const [torrents, setTorrents] = useState<Torrent[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
+
+  const [selection, setSelection] = useState<Set<number>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [filterText, setFilterText] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+
   const [magnet, setMagnet] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  const [detail, setDetail] = useState<TorrentDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const timer = useRef<number | null>(null);
+  const anchor = useRef<number | null>(null);
+  const detailIdRef = useRef<number | null>(null);
+
+  const visible = useMemo(
+    () =>
+      sortTorrents(
+        filterTorrents(torrents, { text: filterText, statusId: filterStatus }),
+        sortKey,
+        sortDir,
+      ),
+    [torrents, filterText, filterStatus, sortKey, sortDir],
+  );
 
   const refresh = useCallback(async () => {
     try {
-      const list = await invoke<Torrent[]>("rpc_torrents");
-      setTorrents(list);
+      setTorrents(await rpc.torrents());
       setLastUpdate(new Date());
       setError("");
     } catch (e) {
@@ -87,69 +64,149 @@ function App() {
     }
   }, []);
 
-  const connect = useCallback(async () => {
-    setConnecting(true);
-    setError("");
+  const refreshDetail = useCallback(async () => {
+    const id = detailIdRef.current;
+    if (id == null) return;
+    setDetailLoading(true);
     try {
-      const res = await invoke<ConnectResult>("rpc_connect", {
-        config: {
-          host: form.host,
-          port: Number(form.port),
-          path: form.path,
-          username: form.username,
-          password: form.password,
-          https: form.https,
-          accept_invalid_certs: form.acceptInvalid,
-        },
-      });
-      setConnected(true);
-      setServerVersion(`${res.version} (rpc v${res.rpcVersion})`);
-      await refresh();
+      const list = await rpc.details([id]);
+      setDetail(list[0] ?? null);
     } catch (e) {
-      setConnected(false);
       setError(String(e));
     } finally {
-      setConnecting(false);
+      setDetailLoading(false);
     }
-  }, [form, refresh]);
-
-  const disconnect = useCallback(async () => {
-    await invoke("rpc_disconnect");
-    setConnected(false);
-    setTorrents([]);
-    setServerVersion("");
-    setLastUpdate(null);
   }, []);
 
+  const connect = useCallback(
+    async (override?: ConnForm) => {
+      const cfg = override ?? form;
+      setConnecting(true);
+      setError("");
+      try {
+        const res = await rpc.connect(cfg);
+        setConnected(true);
+        setVersion(`${res.version} (rpc v${res.rpcVersion})`);
+        void saveConnForm(cfg);
+        await refresh();
+      } catch (e) {
+        setConnected(false);
+        setError(String(e));
+      } finally {
+        setConnecting(false);
+      }
+    },
+    [form, refresh],
+  );
+
+  const disconnect = useCallback(async () => {
+    await rpc.disconnect();
+    setConnected(false);
+    setTorrents([]);
+    setSelection(new Set());
+    setVersion("");
+    setLastUpdate(null);
+    detailIdRef.current = null;
+    setDetail(null);
+  }, []);
+
+  // Bootstrap: load the saved connection and auto-connect when present.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { form: saved, saved: hasSaved } = await loadConnForm();
+      if (cancelled) return;
+      setForm(saved);
+      if (hasSaved) void connect(saved);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-refresh loop for the list and any open details panel.
   useEffect(() => {
     if (!connected || !autoRefresh) return;
-    timer.current = window.setInterval(refresh, REFRESH_MS);
+    timer.current = window.setInterval(() => {
+      void refresh();
+      void refreshDetail();
+    }, REFRESH_MS);
     return () => {
       if (timer.current) window.clearInterval(timer.current);
     };
-  }, [connected, autoRefresh, refresh]);
+  }, [connected, autoRefresh, refresh, refreshDetail]);
+
+  const onRowClick = useCallback(
+    (id: number, e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        setSelection((prev) => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+        });
+        anchor.current = id;
+      } else if (e.shiftKey && anchor.current != null) {
+        const ids = visible.map((t) => t.id);
+        const i0 = ids.indexOf(anchor.current);
+        const i1 = ids.indexOf(id);
+        if (i0 >= 0 && i1 >= 0) {
+          const [a, b] = i0 < i1 ? [i0, i1] : [i1, i0];
+          setSelection(new Set(ids.slice(a, b + 1)));
+        }
+      } else {
+        setSelection(new Set([id]));
+        anchor.current = id;
+      }
+    },
+    [visible],
+  );
+
+  const onSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir(nextDir(sortDir, true));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const toggleAll = () => {
+    const allSelected = visible.length > 0 && visible.every((t) => selection.has(t.id));
+    setSelection(allSelected ? new Set() : new Set(visible.map((t) => t.id)));
+  };
+
+  const openDetails = useCallback(
+    (id: number) => {
+      detailIdRef.current = id;
+      void refreshDetail();
+    },
+    [refreshDetail],
+  );
 
   const action = useCallback(
     async (act: string) => {
-      const ids = selected != null ? [selected] : [];
+      const ids = [...selection];
       if (ids.length === 0) {
-        setError("先在列表里选一个种子");
+        setError("先在列表里选中种子");
         return;
       }
       try {
-        await invoke("rpc_torrent_action", { action: act, ids });
+        await rpc.action(act, ids);
         await refresh();
+        await refreshDetail();
       } catch (e) {
         setError(String(e));
       }
     },
-    [selected, refresh],
+    [selection, refresh, refreshDetail],
   );
 
-  const addTorrent = useCallback(async () => {
+  const add = useCallback(async () => {
     if (!magnet.trim()) return;
     try {
-      await invoke("rpc_add_torrent", { filename: magnet.trim(), downloadDir: null });
+      await rpc.add(magnet.trim());
       setMagnet("");
       await refresh();
     } catch (e) {
@@ -157,7 +214,14 @@ function App() {
     }
   }, [magnet, refresh]);
 
-  const set = <K extends keyof ConnForm>(key: K, value: ConnForm[K]) =>
+  // Keep an open details panel following the current selection.
+  useEffect(() => {
+    if (detailIdRef.current != null && !selection.has(detailIdRef.current) && selection.size > 0) {
+      openDetails([...selection][0]);
+    }
+  }, [selection, openDetails]);
+
+  const setField = <K extends keyof ConnForm>(key: K, value: ConnForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   return (
@@ -165,162 +229,85 @@ function App() {
       <header className="topbar">
         <span className="brand">transgui-next</span>
         <span className={`dot ${connected ? "on" : "off"}`} />
-        <span className="conn-state">{connected ? `已连接 · ${serverVersion}` : "未连接"}</span>
+        <span className="conn-state">{connected ? `已连接 · ${version}` : "未连接"}</span>
+        <span className="spacer" />
+        <input
+          className="filter"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder="筛选 名称 / 标签 / 哈希"
+          disabled={!connected}
+        />
+        <select
+          className="filter-status"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          disabled={!connected}
+        >
+          {STATUS_FILTERS.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
       </header>
 
-      <section className="conn-form">
-        <input
-          className="mono"
-          value={form.host}
-          onChange={(e) => set("host", e.target.value)}
-          placeholder="主机"
-          disabled={connected}
-        />
-        <input
-          className="narrow"
-          value={form.port}
-          onChange={(e) => set("port", e.target.value)}
-          placeholder="端口"
-          disabled={connected}
-        />
-        <input
-          value={form.username}
-          onChange={(e) => set("username", e.target.value)}
-          placeholder="用户名"
-          disabled={connected}
-        />
-        <input
-          type="password"
-          value={form.password}
-          onChange={(e) => set("password", e.target.value)}
-          placeholder="密码"
-          disabled={connected}
-        />
-        <label className="chk">
-          <input
-            type="checkbox"
-            checked={form.https}
-            onChange={(e) => set("https", e.target.checked)}
-            disabled={connected}
-          />
-          HTTPS
-        </label>
-        {connected ? (
-          <button className="btn danger" onClick={disconnect}>
-            断开
-          </button>
-        ) : (
-          <button className="btn primary" onClick={connect} disabled={connecting}>
-            {connecting ? "连接中…" : "连接"}
-          </button>
-        )}
-      </section>
+      <ConnectionBar
+        form={form}
+        connected={connected}
+        connecting={connecting}
+        onChange={setField}
+        onConnect={() => connect()}
+        onDisconnect={disconnect}
+      />
 
       {error && <div className="error">{error}</div>}
 
-      <section className="toolbar">
-        <button className="btn" onClick={() => action("start")} disabled={!connected}>
-          开始
-        </button>
-        <button className="btn" onClick={() => action("stop")} disabled={!connected}>
-          停止
-        </button>
-        <button className="btn" onClick={() => action("verify")} disabled={!connected}>
-          校验
-        </button>
-        <button className="btn" onClick={() => action("reannounce")} disabled={!connected}>
-          汇报
-        </button>
-        <button className="btn danger" onClick={() => action("remove")} disabled={!connected}>
-          移除
-        </button>
-        <span className="spacer" />
-        <input
-          className="magnet"
-          value={magnet}
-          onChange={(e) => setMagnet(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addTorrent()}
-          placeholder="magnet: / http(s) / .torrent 路径"
-          disabled={!connected}
-        />
-        <button className="btn" onClick={addTorrent} disabled={!connected}>
-          添加
-        </button>
-        <button className="btn" onClick={refresh} disabled={!connected}>
-          刷新
-        </button>
-        <label className="chk">
-          <input
-            type="checkbox"
-            checked={autoRefresh}
-            onChange={(e) => setAutoRefresh(e.target.checked)}
-          />
-          自动 {REFRESH_MS / 1000}s
-        </label>
-      </section>
+      <Toolbar
+        connected={connected}
+        selectedCount={selection.size}
+        magnet={magnet}
+        autoRefresh={autoRefresh}
+        refreshMs={REFRESH_MS}
+        onAction={action}
+        onMagnetChange={setMagnet}
+        onAdd={add}
+        onRefresh={() => {
+          void refresh();
+          void refreshDetail();
+        }}
+        onAutoRefreshChange={setAutoRefresh}
+      />
 
-      <div className="table-wrap">
-        <table className="torrents">
-          <thead>
-            <tr>
-              <th className="col-name">名称</th>
-              <th>状态</th>
-              <th className="num">大小</th>
-              <th className="col-prog">进度</th>
-              <th className="num">下载</th>
-              <th className="num">上传</th>
-              <th className="num">比率</th>
-              <th className="num">剩余</th>
-              <th>标签</th>
-              <th className="num">Peer</th>
-            </tr>
-          </thead>
-          <tbody>
-            {torrents.length === 0 && (
-              <tr>
-                <td className="empty" colSpan={10}>
-                  {connected ? "暂无种子" : "连接 daemon 后显示种子列表"}
-                </td>
-              </tr>
-            )}
-            {torrents.map((t) => (
-              <tr
-                key={t.id}
-                className={selected === t.id ? "sel" : ""}
-                onClick={() => setSelected(t.id)}
-                onDoubleClick={() => setSelected(t.id)}
-                title={t.error ? t.errorString : `${t.hashString}\n${t.downloadDir}`}
-              >
-                <td className="col-name" title={t.name}>
-                  {t.name}
-                </td>
-                <td>
-                  <span className={`pill ${statusClass(t.status)}`}>{statusText(t)}</span>
-                </td>
-                <td className="num">{formatBytes(t.sizeWhenDone || t.totalSize)}</td>
-                <td className="col-prog">
-                  <div className="prog">
-                    <div className="prog-fill" style={{ width: `${(t.percentDone || 0) * 100}%` }} />
-                    <span className="prog-text">{formatPercent(t.percentDone)}</span>
-                  </div>
-                </td>
-                <td className="num down">{formatSpeed(t.rateDownload)}</td>
-                <td className="num up">{formatSpeed(t.rateUpload)}</td>
-                <td className="num">{formatRatio(t.uploadRatio)}</td>
-                <td className="num">{formatEta(t.eta)}</td>
-                <td className="labels">{(t.labels ?? []).join(", ")}</td>
-                <td className="num">
-                  {t.peersConnected} <span className="muted">↓{t.peersSendingToUs} ↑{t.peersGettingFromUs}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <TorrentTable
+        torrents={visible}
+        total={torrents.length}
+        connected={connected}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        selection={selection}
+        onSort={onSort}
+        onRowClick={onRowClick}
+        onToggleAll={toggleAll}
+        onOpenDetails={openDetails}
+      />
+
+      <DetailsPanel
+        detail={detail}
+        loading={detailLoading}
+        onClose={() => {
+          detailIdRef.current = null;
+          setDetail(null);
+        }}
+        onRefresh={refreshDetail}
+      />
 
       <footer className="statusbar">
-        <span>共 {torrents.length} 个种子</span>
-        {selected != null && <span>选中 #{selected}</span>}
+        <span>
+          共 {torrents.length} 个种子
+          {visible.length !== torrents.length ? ` · 筛选出 ${visible.length}` : ""}
+        </span>
+        {selection.size > 0 && <span>选中 {selection.size}</span>}
         <span className="spacer" />
         {lastUpdate && <span>更新于 {lastUpdate.toLocaleTimeString()}</span>}
       </footer>

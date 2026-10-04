@@ -54,6 +54,27 @@ body,
   color: #9aa3ad;
   font-size: 12px;
 }
+.filter,
+.filter-status {
+  background: #14171b;
+  border: 1px solid #363c46;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: inherit;
+  outline: none;
+  font-size: 12px;
+}
+.filter {
+  width: 220px;
+}
+.filter:focus,
+.filter-status:focus {
+  border-color: #3b82f6;
+}
+.filter:disabled,
+.filter-status:disabled {
+  opacity: 0.5;
+}
 
 /* ---- connection form ---- */
 .conn-form {
@@ -144,6 +165,10 @@ input.mono {
 .spacer {
   flex: 1;
 }
+.sel-hint {
+  color: #7cc4f5;
+  font-size: 12px;
+}
 .magnet {
   background: #14171b;
   border: 1px solid #363c46;
@@ -165,10 +190,11 @@ input.mono {
   user-select: none;
 }
 
-/* ---- table ---- */
+/* ---- main table ---- */
 .table-wrap {
   flex: 1;
   overflow: auto;
+  min-height: 120px;
 }
 table.torrents {
   width: 100%;
@@ -178,6 +204,7 @@ table.torrents {
 table.torrents thead th {
   position: sticky;
   top: 0;
+  z-index: 1;
   background: #262b33;
   text-align: left;
   padding: 7px 10px;
@@ -186,15 +213,27 @@ table.torrents thead th {
   border-bottom: 1px solid #333a44;
   white-space: nowrap;
 }
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  color: #dfe6ee;
+  background: #2c323b;
+}
+th.col-check,
+td.col-check {
+  width: 30px;
+  text-align: center;
+  padding-left: 8px;
+  padding-right: 0;
+}
 table.torrents td {
   padding: 6px 10px;
   border-bottom: 1px solid #262b33;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-table.torrents tbody tr {
-  cursor: default;
 }
 table.torrents tbody tr:hover {
   background: #20252c;
@@ -231,6 +270,13 @@ td.empty {
 }
 .up {
   color: #6fce8a;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
 }
 
 /* ---- status pill ---- */
@@ -271,6 +317,9 @@ td.empty {
   border-radius: 4px;
   overflow: hidden;
 }
+.prog.small {
+  height: 13px;
+}
 .prog-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -285,6 +334,119 @@ td.empty {
   color: #eaf2ff;
   text-shadow: 0 0 3px #000;
   font-variant-numeric: tabular-nums;
+}
+.prog.small .prog-text {
+  line-height: 13px;
+  font-size: 10.5px;
+}
+
+/* ---- details panel ---- */
+.details {
+  height: 280px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #313640;
+  background: #1b1f24;
+  flex-shrink: 0;
+}
+.details.empty-details {
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+}
+.details-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #2a3038;
+  background: #202529;
+}
+.details-tabs {
+  display: flex;
+  gap: 2px;
+}
+.tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #9aa3ad;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+.tab:hover {
+  color: #dfe6ee;
+}
+.tab.active {
+  color: #eaf2ff;
+  border-bottom-color: #3b82f6;
+}
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #333a44;
+  color: #c3cad3;
+  font-size: 10.5px;
+}
+.details-title {
+  color: #c3cad3;
+  font-size: 12px;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.details-body {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+/* key/value grid in the info tab */
+.kv-grid {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 4px 14px;
+  font-size: 12.5px;
+}
+.kv-key {
+  color: #8b939d;
+}
+.kv-val {
+  color: #dfe6ee;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* sub tables (files / peers / trackers) */
+table.sub-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+table.sub-table thead th {
+  position: sticky;
+  top: -10px;
+  background: #1b1f24;
+  text-align: left;
+  padding: 6px 10px;
+  color: #a8b0ba;
+  font-weight: 600;
+  border-bottom: 1px solid #333a44;
+  white-space: nowrap;
+}
+table.sub-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid #242931;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.sub-table td.empty {
+  padding: 24px;
 }
 
 /* ---- status bar ---- */
