@@ -446,6 +446,11 @@ mod tests {
 
     /// Live round-trip against a real transmission daemon.
     /// Override with TRANSMISSION_TEST_URL / _USER / _PASS.
+    ///
+    /// Ignored by default: CI runners have no daemon, so an always-on version
+    /// would make `cargo test` fail. Run it locally with
+    /// `cargo test --lib -- --ignored live_rpc_roundtrip`.
+    #[ignore = "requires a live transmission daemon"]
     #[tokio::test]
     async fn live_rpc_roundtrip() {
         let base = std::env::var("TRANSMISSION_TEST_URL")
