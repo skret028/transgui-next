@@ -100,6 +100,13 @@ export interface ConnForm {
   acceptInvalid: boolean;
 }
 
+/** A saved server/connection bookmark. */
+export interface ServerBookmark {
+  id: string;
+  name: string;
+  form: ConnForm;
+}
+
 export interface ConnectResult {
   version: string;
   rpcVersion: number;

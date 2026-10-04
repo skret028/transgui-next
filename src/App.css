@@ -101,6 +101,28 @@ body,
 .conn-form input:disabled {
   opacity: 0.55;
 }
+.server-select,
+.conn-form input.narrow-wide {
+  background: #14171b;
+  border: 1px solid #363c46;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: inherit;
+  outline: none;
+  min-width: 110px;
+}
+.server-select:focus {
+  border-color: #3b82f6;
+}
+.server-select:disabled {
+  opacity: 0.55;
+}
+.conn-sep {
+  width: 1px;
+  height: 20px;
+  background: #363c46;
+  margin: 0 2px;
+}
 input.narrow {
   width: 70px;
   min-width: 0;

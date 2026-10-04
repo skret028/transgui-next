@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import "./App.css";
 import { rpc } from "./api";
-import { DEFAULT_FORM, loadConnForm, saveConnForm } from "./settings";
+import { DEFAULT_FORM, loadConnForm, loadServers, saveConnForm, saveServers } from "./settings";
 import {
   filterTorrents,
   nextDir,
@@ -11,7 +11,7 @@ import {
   type SortDir,
   type SortKey,
 } from "./torrentList";
-import type { AddTorrentOptions, ConnForm, Torrent, TorrentDetail } from "./types";
+import type { AddTorrentOptions, ConnForm, ServerBookmark, Torrent, TorrentDetail } from "./types";
 import { ConnectionBar } from "./components/ConnectionBar";
 import { Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
@@ -45,6 +45,9 @@ function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
+
+  const [servers, setServers] = useState<ServerBookmark[]>([]);
+  const [selectedServerId, setSelectedServerId] = useState("");
 
   const timer = useRef<number | null>(null);
   const anchor = useRef<number | null>(null);
@@ -133,8 +136,10 @@ function App() {
     let cancelled = false;
     void (async () => {
       const { form: saved, saved: hasSaved } = await loadConnForm();
+      const savedServers = await loadServers();
       if (cancelled) return;
       setForm(saved);
+      setServers(savedServers);
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -263,6 +268,46 @@ function App() {
     }
   }, [selection, openDetails]);
 
+  const persistServers = useCallback(async (list: ServerBookmark[]) => {
+    setServers(list);
+    await saveServers(list);
+  }, []);
+
+  const selectServer = useCallback(
+    (id: string) => {
+      setSelectedServerId(id);
+      const s = servers.find((x) => x.id === id);
+      if (s) setForm(s.form);
+    },
+    [servers],
+  );
+
+  const saveServer = useCallback(
+    (name: string) => {
+      const existing = servers.find((s) => s.name === name);
+      const entry: ServerBookmark = {
+        id: existing?.id ?? `srv_${Date.now().toString(36)}`,
+        name,
+        form,
+      };
+      const list = existing
+        ? servers.map((s) => (s.id === entry.id ? entry : s))
+        : [...servers, entry];
+      void persistServers(list);
+      setSelectedServerId(entry.id);
+    },
+    [servers, form, persistServers],
+  );
+
+  const deleteServer = useCallback(
+    (id: string) => {
+      if (!id) return;
+      void persistServers(servers.filter((s) => s.id !== id));
+      setSelectedServerId("");
+    },
+    [servers, persistServers],
+  );
+
   const setField = <K extends keyof ConnForm>(key: K, value: ConnForm[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -298,9 +343,14 @@ function App() {
         form={form}
         connected={connected}
         connecting={connecting}
+        servers={servers}
+        selectedServerId={selectedServerId}
         onChange={setField}
         onConnect={() => connect()}
         onDisconnect={disconnect}
+        onSelectServer={selectServer}
+        onSaveServer={saveServer}
+        onDeleteServer={deleteServer}
       />
 
       {error && <div className="error">{error}</div>}

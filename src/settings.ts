@@ -1,9 +1,10 @@
 // Connection settings persistence via tauri-plugin-store.
 import { load, type Store } from "@tauri-apps/plugin-store";
-import type { ConnForm } from "./types";
+import type { ConnForm, ServerBookmark } from "./types";
 
 const FILE = "settings.json";
 const KEY = "connection";
+const SERVERS_KEY = "servers";
 
 export const DEFAULT_FORM: ConnForm = {
   host: "localhost",
@@ -40,5 +41,21 @@ export async function loadConnForm(): Promise<{ form: ConnForm; saved: boolean }
 export async function saveConnForm(form: ConnForm): Promise<void> {
   const store = await getStore();
   await store.set(KEY, form);
+  await store.save();
+}
+
+export async function loadServers(): Promise<ServerBookmark[]> {
+  try {
+    const store = await getStore();
+    const list = await store.get<ServerBookmark[]>(SERVERS_KEY);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveServers(list: ServerBookmark[]): Promise<void> {
+  const store = await getStore();
+  await store.set(SERVERS_KEY, list);
   await store.save();
 }
