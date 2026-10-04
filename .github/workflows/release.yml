@@ -73,10 +73,11 @@ jobs:
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: "transgui-next v__VERSION__"
-          # NOTE: use body_path, not releaseBody. tauri-action's get-or-create
-          # path builds the release body as `body_path contents || tag message`
-          # and ignores the releaseBody input there, which silently replaces the
-          # notes with the annotated tag's message.
+          # Release notes live in RELEASE_NOTES.md so they can be edited like
+          # any other file. (tauri-action uses `body_path contents || releaseBody`
+          # as the body — point either one at the notes; do NOT read the release
+          # body back from the public /releases/tag/<tag> page while the release
+          # is still a draft, that page serves the tag annotation, not the body.)
           body_path: RELEASE_NOTES.md
           releaseDraft: true
           prerelease: false
