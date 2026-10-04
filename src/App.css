@@ -460,3 +460,131 @@ table.sub-table td.empty {
   color: #9aa3ad;
   font-size: 12px;
 }
+
+/* ---- modal / dialogs ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: #22262d;
+  border: 1px solid #363c46;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #313640;
+}
+.modal-title {
+  font-weight: 600;
+  flex: 1;
+}
+.modal-body {
+  padding: 14px;
+  overflow: auto;
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid #313640;
+}
+.btn.icon {
+  padding: 3px 9px;
+}
+
+/* form primitives shared by dialogs */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.field > span {
+  color: #8b939d;
+  font-size: 12px;
+}
+.field input,
+.field select {
+  background: #14171b;
+  border: 1px solid #363c46;
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: inherit;
+  outline: none;
+  width: 100%;
+}
+.field input:focus,
+.field select:focus {
+  border-color: #3b82f6;
+}
+.field input:disabled {
+  opacity: 0.5;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.row input {
+  flex: 1;
+}
+.kv-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.kv-inline input.narrow {
+  width: 90px;
+}
+.group {
+  color: #7cc4f5;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 14px 0 8px;
+}
+.group:first-child {
+  margin-top: 0;
+}
+.error.inline {
+  margin: 0 0 12px;
+}
+.settings-form .chk {
+  display: flex;
+  margin-bottom: 10px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.chip {
+  background: #2b313a;
+  border: 1px solid #3c434e;
+  border-radius: 12px;
+  color: #c3cad3;
+  padding: 3px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.chip.on {
+  background: #2f6fed;
+  border-color: #2f6fed;
+  color: #fff;
+}

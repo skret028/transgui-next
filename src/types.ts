@@ -104,3 +104,39 @@ export interface ConnectResult {
   version: string;
   rpcVersion: number;
 }
+
+export interface AddTorrentOptions {
+  filename?: string | null;
+  local_torrent_path?: string | null;
+  download_dir?: string | null;
+  labels?: string[] | null;
+  paused?: boolean | null;
+}
+
+/** Subset of session-get fields surfaced in the settings dialog. */
+export interface SessionInfo {
+  version: string;
+  "rpc-version": number;
+  "download-dir": string;
+  "incomplete-dir": string;
+  "incomplete-dir-enabled": boolean;
+  "speed-limit-down": number;
+  "speed-limit-down-enabled": boolean;
+  "speed-limit-up": number;
+  "speed-limit-up-enabled": boolean;
+  "alt-speed-down": number;
+  "alt-speed-up": number;
+  "alt-speed-enabled": boolean;
+  "peer-port": number;
+  "peer-port-random-on-start": boolean;
+  encryption: string;
+  "dht-enabled": boolean;
+  "pex-enabled": boolean;
+  "lpd-enabled": boolean;
+  "utp-enabled": boolean;
+  "start-added-torrents": boolean;
+  "rename-partial-files": boolean;
+  "seedRatioLimit": number;
+  "seedRatioLimited": boolean;
+  [key: string]: unknown;
+}

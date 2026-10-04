@@ -7,6 +7,7 @@
 //! - Credentials and the live session id stay in the backend (`ConnState`);
 //!   the UI never receives them back.
 
+use base64::Engine as _;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::Mutex;
@@ -332,20 +333,91 @@ pub async fn rpc_torrent_action(
     rpc_call(state.inner(), method, args).await
 }
 
-/// Add a torrent by magnet / URL / local .torrent path.
+/// Apply a `session-set` patch (server/transfer settings).
+#[tauri::command]
+pub async fn rpc_set_session(state: State<'_, AppState>, patch: Value) -> Result<Value, String> {
+    if !patch.is_object() {
+        return Err("session-set 参数必须是对象".into());
+    }
+    rpc_call(state.inner(), "session-set", patch).await
+}
+
+/// Set the label list on the given torrents (torrent-set labels).
+#[tauri::command]
+pub async fn rpc_set_labels(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    labels: Vec<String>,
+) -> Result<Value, String> {
+    let cleaned: Vec<String> = labels
+        .into_iter()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    rpc_call(
+        state.inner(),
+        "torrent-set",
+        json!({ "ids": ids, "labels": cleaned }),
+    )
+    .await
+}
+
+/// Options for adding a torrent. Either `filename` (magnet / URL / a path on
+/// the daemon host) or `local_torrent_path` (a .torrent on THIS machine, sent
+/// as base64 metainfo) must be provided.
+#[derive(Debug, Deserialize)]
+pub struct AddTorrentOptions {
+    #[serde(default)]
+    pub filename: Option<String>,
+    #[serde(default)]
+    pub local_torrent_path: Option<String>,
+    #[serde(default)]
+    pub download_dir: Option<String>,
+    #[serde(default)]
+    pub labels: Option<Vec<String>>,
+    #[serde(default)]
+    pub paused: Option<bool>,
+}
+
+/// Add a torrent from a magnet/URL/daemon path or a local .torrent file.
 #[tauri::command]
 pub async fn rpc_add_torrent(
     state: State<'_, AppState>,
-    filename: String,
-    download_dir: Option<String>,
+    options: AddTorrentOptions,
 ) -> Result<Value, String> {
-    if filename.trim().is_empty() {
-        return Err("filename 为空".into());
+    let mut args = json!({});
+
+    if let Some(path) = options
+        .local_torrent_path
+        .as_ref()
+        .filter(|p| !p.trim().is_empty())
+    {
+        let bytes = std::fs::read(path).map_err(|e| format!("读取本地种子失败：{e}"))?;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+        args["metainfo"] = json!(encoded);
+    } else if let Some(f) = options.filename.as_ref().filter(|f| !f.trim().is_empty()) {
+        args["filename"] = json!(f.trim());
+    } else {
+        return Err("需要磁力链接/URL/daemon 路径，或选择本地 .torrent 文件".into());
     }
-    let mut args = json!({ "filename": filename.trim() });
-    if let Some(d) = download_dir.filter(|d| !d.trim().is_empty()) {
-        args["download-dir"] = json!(d);
+
+    if let Some(d) = options.download_dir.as_ref().filter(|d| !d.trim().is_empty()) {
+        args["download-dir"] = json!(d.trim());
     }
+    if let Some(labels) = options.labels {
+        let cleaned: Vec<String> = labels
+            .into_iter()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        if !cleaned.is_empty() {
+            args["labels"] = json!(cleaned);
+        }
+    }
+    if let Some(paused) = options.paused {
+        args["paused"] = json!(paused);
+    }
+
     rpc_call(state.inner(), "torrent-add", args).await
 }
 
@@ -427,6 +499,39 @@ mod tests {
             assert!(
                 d["trackerStats"].is_array(),
                 "trackerStats array missing in details"
+            );
+
+            // session-set round trip (idempotent: re-apply the current flag).
+            let alt = session
+                .get("alt-speed-enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            rpc_call(&state, "session-set", json!({ "alt-speed-enabled": alt }))
+                .await
+                .expect("session-set");
+            println!("session-set ok (alt-speed-enabled={alt})");
+
+            // labels round trip
+            rpc_call(
+                &state,
+                "torrent-set",
+                json!({ "ids": [id], "labels": ["p2-verify"] }),
+            )
+            .await
+            .expect("torrent-set labels");
+            let lres = rpc_call(
+                &state,
+                "torrent-get",
+                json!({ "ids": [id], "fields": ["labels"] }),
+            )
+            .await
+            .expect("torrent-get labels");
+            let labels = &lres["torrents"][0]["labels"];
+            println!("labels after set = {labels}");
+            assert_eq!(
+                labels[0].as_str().unwrap_or(""),
+                "p2-verify",
+                "labels round trip failed"
             );
         }
     }

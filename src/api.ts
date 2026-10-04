@@ -1,7 +1,14 @@
 // Thin typed wrappers over the Tauri commands. One place that knows the
 // backend command names and argument shapes.
 import { invoke } from "@tauri-apps/api/core";
-import type { ConnectResult, ConnForm, Torrent, TorrentDetail } from "./types";
+import type {
+  AddTorrentOptions,
+  ConnectResult,
+  ConnForm,
+  SessionInfo,
+  Torrent,
+  TorrentDetail,
+} from "./types";
 
 export const rpc = {
   connect: (form: ConnForm) =>
@@ -19,6 +26,11 @@ export const rpc = {
 
   disconnect: () => invoke<void>("rpc_disconnect"),
 
+  session: () => invoke<SessionInfo>("rpc_session"),
+
+  setSession: (patch: Record<string, unknown>) =>
+    invoke<unknown>("rpc_set_session", { patch }),
+
   torrents: () => invoke<Torrent[]>("rpc_torrents"),
 
   details: (ids: number[]) => invoke<TorrentDetail[]>("rpc_torrent_details", { ids }),
@@ -26,6 +38,8 @@ export const rpc = {
   action: (action: string, ids: number[]) =>
     invoke<unknown>("rpc_torrent_action", { action, ids }),
 
-  add: (filename: string, downloadDir?: string | null) =>
-    invoke<unknown>("rpc_add_torrent", { filename, downloadDir: downloadDir ?? null }),
+  setLabels: (ids: number[], labels: string[]) =>
+    invoke<unknown>("rpc_set_labels", { ids, labels }),
+
+  add: (options: AddTorrentOptions) => invoke<unknown>("rpc_add_torrent", { options }),
 };

@@ -13,15 +13,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             greet,
             rpc::rpc_connect,
             rpc::rpc_disconnect,
             rpc::rpc_session,
+            rpc::rpc_set_session,
             rpc::rpc_torrents,
             rpc::rpc_torrent_details,
             rpc::rpc_torrent_action,
+            rpc::rpc_set_labels,
             rpc::rpc_add_torrent,
         ])
         .run(tauri::generate_context!())

@@ -1,12 +1,12 @@
 interface Props {
   connected: boolean;
   selectedCount: number;
-  magnet: string;
   autoRefresh: boolean;
   refreshMs: number;
   onAction: (action: string) => void;
-  onMagnetChange: (value: string) => void;
-  onAdd: () => void;
+  onOpenAdd: () => void;
+  onOpenSettings: () => void;
+  onOpenLabels: () => void;
   onRefresh: () => void;
   onAutoRefreshChange: (value: boolean) => void;
 }
@@ -14,12 +14,12 @@ interface Props {
 export function Toolbar({
   connected,
   selectedCount,
-  magnet,
   autoRefresh,
   refreshMs,
   onAction,
-  onMagnetChange,
-  onAdd,
+  onOpenAdd,
+  onOpenSettings,
+  onOpenLabels,
   onRefresh,
   onAutoRefreshChange,
 }: Props) {
@@ -41,18 +41,16 @@ export function Toolbar({
       <button className="btn danger" onClick={() => onAction("remove")} disabled={!connected || needSel}>
         移除
       </button>
+      <button className="btn" onClick={onOpenLabels} disabled={!connected || needSel}>
+        标签
+      </button>
       {selectedCount > 0 && <span className="sel-hint">已选 {selectedCount}</span>}
       <span className="spacer" />
-      <input
-        className="magnet"
-        value={magnet}
-        onChange={(e) => onMagnetChange(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && onAdd()}
-        placeholder="magnet: / http(s) / .torrent 路径"
-        disabled={!connected}
-      />
-      <button className="btn" onClick={onAdd} disabled={!connected}>
-        添加
+      <button className="btn primary" onClick={onOpenAdd} disabled={!connected}>
+        添加种子…
+      </button>
+      <button className="btn" onClick={onOpenSettings} disabled={!connected}>
+        设置
       </button>
       <button className="btn" onClick={onRefresh} disabled={!connected}>
         刷新

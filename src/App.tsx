@@ -11,11 +11,14 @@ import {
   type SortDir,
   type SortKey,
 } from "./torrentList";
-import type { ConnForm, Torrent, TorrentDetail } from "./types";
+import type { AddTorrentOptions, ConnForm, Torrent, TorrentDetail } from "./types";
 import { ConnectionBar } from "./components/ConnectionBar";
 import { Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
 import { DetailsPanel } from "./components/DetailsPanel";
+import { AddTorrentDialog } from "./components/AddTorrentDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
+import { LabelsDialog } from "./components/LabelsDialog";
 
 const REFRESH_MS = 2000;
 
@@ -33,12 +36,15 @@ function App() {
   const [filterText, setFilterText] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const [magnet, setMagnet] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   const [detail, setDetail] = useState<TorrentDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
 
   const timer = useRef<number | null>(null);
   const anchor = useRef<number | null>(null);
@@ -53,6 +59,18 @@ function App() {
       ),
     [torrents, filterText, filterStatus, sortKey, sortDir],
   );
+
+  const knownLabels = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of torrents) for (const l of t.labels ?? []) set.add(l);
+    return [...set].sort();
+  }, [torrents]);
+
+  const selectedLabels = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of torrents) if (selection.has(t.id)) for (const l of t.labels ?? []) set.add(l);
+    return [...set].sort();
+  }, [torrents, selection]);
 
   const refresh = useCallback(async () => {
     try {
@@ -203,16 +221,40 @@ function App() {
     [selection, refresh, refreshDetail],
   );
 
-  const add = useCallback(async () => {
-    if (!magnet.trim()) return;
-    try {
-      await rpc.add(magnet.trim());
-      setMagnet("");
+  const submitAdd = useCallback(
+    async (options: AddTorrentOptions) => {
+      try {
+        await rpc.add(options);
+        setShowAdd(false);
+        await refresh();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [refresh],
+  );
+
+  const applySettings = useCallback(
+    async (patch: Record<string, unknown>) => {
+      await rpc.setSession(patch);
+      setShowSettings(false);
+      setError("");
+      void refresh();
+    },
+    [refresh],
+  );
+
+  const applyLabels = useCallback(
+    async (labels: string[]) => {
+      const ids = [...selection];
+      if (ids.length === 0) return;
+      await rpc.setLabels(ids, labels);
+      setShowLabels(false);
       await refresh();
-    } catch (e) {
-      setError(String(e));
-    }
-  }, [magnet, refresh]);
+      void refreshDetail();
+    },
+    [selection, refresh, refreshDetail],
+  );
 
   // Keep an open details panel following the current selection.
   useEffect(() => {
@@ -266,12 +308,12 @@ function App() {
       <Toolbar
         connected={connected}
         selectedCount={selection.size}
-        magnet={magnet}
         autoRefresh={autoRefresh}
         refreshMs={REFRESH_MS}
         onAction={action}
-        onMagnetChange={setMagnet}
-        onAdd={add}
+        onOpenAdd={() => setShowAdd(true)}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenLabels={() => setShowLabels(true)}
         onRefresh={() => {
           void refresh();
           void refreshDetail();
@@ -311,6 +353,28 @@ function App() {
         <span className="spacer" />
         {lastUpdate && <span>更新于 {lastUpdate.toLocaleTimeString()}</span>}
       </footer>
+
+      {showAdd && (
+        <AddTorrentDialog onClose={() => setShowAdd(false)} onSubmit={submitAdd} />
+      )}
+
+      {showSettings && (
+        <SettingsDialog
+          onLoad={() => rpc.session()}
+          onClose={() => setShowSettings(false)}
+          onApply={applySettings}
+        />
+      )}
+
+      {showLabels && (
+        <LabelsDialog
+          count={selection.size}
+          current={selectedLabels}
+          known={knownLabels}
+          onClose={() => setShowLabels(false)}
+          onApply={applyLabels}
+        />
+      )}
     </div>
   );
 }
