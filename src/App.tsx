@@ -18,12 +18,15 @@ import {
   saveServers,
 } from "./settings";
 import {
+  ALL_SELECTION,
   filterTorrents,
   nextDir,
   pickNewlyFinished,
   seedFinished,
   sortTorrents,
   STATUS_FILTERS,
+  statusIdOf,
+  type FilterSelection,
   type SortDir,
   type SortKey,
 } from "./torrentList";
@@ -46,6 +49,7 @@ import { LabelsDialog } from "./components/LabelsDialog";
 import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
 import { StatsDialog } from "./components/StatsDialog";
 import { ColumnsDialog } from "./components/ColumnsDialog";
+import { FilterPane } from "./components/FilterPane";
 import { DEFAULT_COLUMNS, normalizeColumns, type ColumnId } from "./columns";
 import { notify } from "./notify";
 import { listen } from "@tauri-apps/api/event";
@@ -70,7 +74,7 @@ function AppInner() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterText, setFilterText] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterSel, setFilterSel] = useState<FilterSelection>(ALL_SELECTION);
 
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -105,11 +109,11 @@ function AppInner() {
   const visible = useMemo(
     () =>
       sortTorrents(
-        filterTorrents(torrents, { text: filterText, statusId: filterStatus }),
+        filterTorrents(torrents, { text: filterText, selection: filterSel }),
         sortKey,
         sortDir,
       ),
-    [torrents, filterText, filterStatus, sortKey, sortDir],
+    [torrents, filterText, filterSel, sortKey, sortDir],
   );
 
   // Revealing a path only means something when the daemon shares this
@@ -328,6 +332,10 @@ function AppInner() {
     },
     [refresh],
   );
+
+  // Stable identity: the dialog reloads its form in an effect keyed on this
+  // prop, so a fresh arrow here would wipe unsaved edits on every poll tick.
+  const loadSession = useCallback(() => rpc.session(), []);
 
   const applySettings = useCallback(
     async (patch: Record<string, unknown>) => {
@@ -569,8 +577,10 @@ function AppInner() {
         />
         <select
           className="filter-status"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
+          value={statusIdOf(filterSel)}
+          onChange={(e) =>
+            setFilterSel(e.target.value === "all" ? ALL_SELECTION : { kind: "status", value: e.target.value })
+          }
           disabled={!connected}
         >
           {STATUS_FILTERS.map((s) => (
@@ -619,30 +629,36 @@ function AppInner() {
         onAutoRefreshChange={setAutoRefresh}
       />
 
-      <TorrentTable
-        torrents={visible}
-        total={torrents.length}
-        connected={connected}
-        sortKey={sortKey}
-        sortDir={sortDir}
-        selection={selection}
-        columns={columns}
-        onSort={onSort}
-        onRowClick={onRowClick}
-        onToggleAll={toggleAll}
-        onOpenDetails={openDetails}
-      />
+      <div className="main-area">
+        <FilterPane torrents={torrents} selection={filterSel} onSelect={setFilterSel} />
 
-      <DetailsPanel
-        detail={detail}
-        loading={detailLoading}
-        canReveal={canReveal}
-        onClose={() => {
-          detailIdRef.current = null;
-          setDetail(null);
-        }}
-        onRefresh={refreshDetail}
-      />
+        <div className="list-area">
+          <TorrentTable
+            torrents={visible}
+            total={torrents.length}
+            connected={connected}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            selection={selection}
+            columns={columns}
+            onSort={onSort}
+            onRowClick={onRowClick}
+            onToggleAll={toggleAll}
+            onOpenDetails={openDetails}
+          />
+
+          <DetailsPanel
+            detail={detail}
+            loading={detailLoading}
+            canReveal={canReveal}
+            onClose={() => {
+              detailIdRef.current = null;
+              setDetail(null);
+            }}
+            onRefresh={refreshDetail}
+          />
+        </div>
+      </div>
 
       <footer className="statusbar">
         <span>
@@ -663,7 +679,7 @@ function AppInner() {
 
       {showSettings && (
         <SettingsDialog
-          onLoad={() => rpc.session()}
+          onLoad={loadSession}
           onClose={() => setShowSettings(false)}
           onApply={applySettings}
           notifyOnComplete={notifyOnComplete}

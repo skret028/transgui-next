@@ -199,6 +199,7 @@ pub fn run() {
             rpc::rpc_session_stats,
             rpc::rpc_free_space,
             rpc::rpc_port_test,
+            rpc::rpc_blocklist_update,
             rpc::rpc_rename_path,
             rpc::rpc_set_location,
             take_pending_opens,

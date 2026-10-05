@@ -371,6 +371,13 @@ pub async fn rpc_port_test(state: State<'_, AppState>) -> Result<Value, String> 
     rpc_call(state.inner(), "port-test", json!({})).await
 }
 
+/// Ask the daemon to re-download its blocklist; the reply carries the new rule
+/// count as `blocklist-size`.
+#[tauri::command]
+pub async fn rpc_blocklist_update(state: State<'_, AppState>) -> Result<Value, String> {
+    rpc_call(state.inner(), "blocklist-update", json!({})).await
+}
+
 /// Rename a file or folder inside a torrent (torrent-rename-path).
 #[tauri::command]
 pub async fn rpc_rename_path(

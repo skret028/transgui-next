@@ -55,6 +55,9 @@ export const rpc = {
 
   portTest: () => invoke<PortTest>("rpc_port_test"),
 
+  /** Re-download the daemon's blocklist; returns { "blocklist-size": n }. */
+  blocklistUpdate: () => invoke<{ "blocklist-size"?: number }>("rpc_blocklist_update"),
+
   renamePath: (id: number, path: string, name: string) =>
     invoke<unknown>("rpc_rename_path", { id, path, name }),
 

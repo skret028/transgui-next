@@ -36,9 +36,52 @@ interface Fields {
   renamePartial: boolean;
   seedRatioLimit: string;
   seedRatioLimited: boolean;
+  altTimeEnabled: boolean;
+  altTimeBegin: string;
+  altTimeEnd: string;
+  /** Kept as the raw bit mask so a custom schedule survives a round trip. */
+  altTimeDay: string;
+  peerLimitGlobal: string;
+  peerLimitTorrent: string;
+  downloadQueueEnabled: boolean;
+  downloadQueueSize: string;
+  seedQueueEnabled: boolean;
+  seedQueueSize: string;
+  queueStalledEnabled: boolean;
+  queueStalledMinutes: string;
+  cacheSizeMb: string;
+  idleSeedingEnabled: boolean;
+  idleSeedingLimit: string;
+  blocklistEnabled: boolean;
+  blocklistUrl: string;
+  /** Read-only: how many rules the daemon currently has loaded. */
+  blocklistSize: number;
+  trashOriginal: boolean;
+  defaultTrackers: string;
 }
 
 const numStr = (v: unknown) => (v == null ? "" : String(v));
+
+/** Sunday-first bits, matching how Transmission encodes alt-speed-time-day. */
+const DAY_BITS = [1, 2, 4, 8, 16, 32, 64];
+const DAY_KEYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** Transmission stores these as minutes since midnight. */
+function minsToTime(v: unknown): string {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return "00:00";
+  const h = Math.floor(n / 60) % 24;
+  const m = Math.floor(n % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function timeToMins(v: string): number {
+  const parts = v.trim().split(":");
+  const h = Number(parts[0]);
+  const m = Number(parts[1] ?? 0);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
+  return Math.max(0, Math.min(1439, Math.floor(h) * 60 + Math.floor(m)));
+}
 
 function fromSession(s: SessionInfo): Fields {
   return {
@@ -64,6 +107,26 @@ function fromSession(s: SessionInfo): Fields {
     renamePartial: !!s["rename-partial-files"],
     seedRatioLimit: numStr(s["seedRatioLimit"]),
     seedRatioLimited: !!s["seedRatioLimited"],
+    altTimeEnabled: !!s["alt-speed-time-enabled"],
+    altTimeBegin: minsToTime(s["alt-speed-time-begin"]),
+    altTimeEnd: minsToTime(s["alt-speed-time-end"]),
+    altTimeDay: String(s["alt-speed-time-day"] ?? 127),
+    peerLimitGlobal: numStr(s["peer-limit-global"]),
+    peerLimitTorrent: numStr(s["peer-limit-per-torrent"]),
+    downloadQueueEnabled: !!s["download-queue-enabled"],
+    downloadQueueSize: numStr(s["download-queue-size"]),
+    seedQueueEnabled: !!s["seed-queue-enabled"],
+    seedQueueSize: numStr(s["seed-queue-size"]),
+    queueStalledEnabled: !!s["queue-stalled-enabled"],
+    queueStalledMinutes: numStr(s["queue-stalled-minutes"]),
+    cacheSizeMb: numStr(s["cache-size-mb"]),
+    idleSeedingEnabled: !!s["idle-seeding-limit-enabled"],
+    idleSeedingLimit: numStr(s["idle-seeding-limit"]),
+    blocklistEnabled: !!s["blocklist-enabled"],
+    blocklistUrl: String(s["blocklist-url"] ?? ""),
+    blocklistSize: Number(s["blocklist-size"] ?? 0),
+    trashOriginal: !!s["trash-original-torrent-files"],
+    defaultTrackers: String(s["default-trackers"] ?? ""),
   };
 }
 
@@ -95,6 +158,26 @@ function toPatch(f: Fields): Record<string, unknown> {
     "rename-partial-files": f.renamePartial,
     seedRatioLimit: n(f.seedRatioLimit),
     seedRatioLimited: f.seedRatioLimited,
+    "alt-speed-time-enabled": f.altTimeEnabled,
+    "alt-speed-time-begin": timeToMins(f.altTimeBegin),
+    "alt-speed-time-end": timeToMins(f.altTimeEnd),
+    "alt-speed-time-day": n(f.altTimeDay),
+    "peer-limit-global": n(f.peerLimitGlobal),
+    "peer-limit-per-torrent": n(f.peerLimitTorrent),
+    "download-queue-enabled": f.downloadQueueEnabled,
+    "download-queue-size": n(f.downloadQueueSize),
+    "seed-queue-enabled": f.seedQueueEnabled,
+    "seed-queue-size": n(f.seedQueueSize),
+    "queue-stalled-enabled": f.queueStalledEnabled,
+    "queue-stalled-minutes": n(f.queueStalledMinutes),
+    "cache-size-mb": n(f.cacheSizeMb),
+    "idle-seeding-limit-enabled": f.idleSeedingEnabled,
+    "idle-seeding-limit": n(f.idleSeedingLimit),
+    "blocklist-enabled": f.blocklistEnabled,
+    "blocklist-url": f.blocklistUrl.trim(),
+    // blocklist-size is an accessor; the daemon owns it.
+    "trash-original-torrent-files": f.trashOriginal,
+    "default-trackers": f.defaultTrackers.trim(),
   };
 }
 
@@ -105,6 +188,7 @@ export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onN
   const [error, setError] = useState("");
   const [portBusy, setPortBusy] = useState(false);
   const [portOpen, setPortOpen] = useState<boolean | null>(null);
+  const [blockBusy, setBlockBusy] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -144,6 +228,22 @@ export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onN
       setError(String(e));
     } finally {
       setPortBusy(false);
+    }
+  };
+
+  // The daemon downloads the blocklist itself; we only trigger it and read back
+  // the new rule count.
+  const updateBlocklist = async () => {
+    setBlockBusy(true);
+    setError("");
+    try {
+      const res = await rpc.blocklistUpdate();
+      const size = Number(res["blocklist-size"] ?? 0);
+      setFields((f) => (f ? { ...f, blocklistSize: size } : f));
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBlockBusy(false);
     }
   };
 
@@ -236,6 +336,48 @@ export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onN
             <span className="muted">{t("Upload")}</span>
             <input className="narrow" value={fields.altUp} onChange={(e) => set("altUp", e.target.value)} />
           </div>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={fields.altTimeEnabled}
+              onChange={(e) => set("altTimeEnabled", e.target.checked)}
+            />
+            {t("Schedule alternative limits")}
+          </label>
+          <div className="kv-inline">
+            <span className="muted">{t("From")}</span>
+            <input
+              type="time"
+              value={fields.altTimeBegin}
+              onChange={(e) => set("altTimeBegin", e.target.value)}
+              disabled={!fields.altTimeEnabled}
+            />
+            <span className="muted">{t("To")}</span>
+            <input
+              type="time"
+              value={fields.altTimeEnd}
+              onChange={(e) => set("altTimeEnd", e.target.value)}
+              disabled={!fields.altTimeEnabled}
+            />
+          </div>
+          <div className="kv-inline">
+            <span className="muted">{t("On days")}</span>
+            {DAY_KEYS.map((day, i) => (
+              <label key={day} className="chk">
+                <input
+                  type="checkbox"
+                  checked={(Number(fields.altTimeDay) & DAY_BITS[i]) !== 0}
+                  disabled={!fields.altTimeEnabled}
+                  onChange={(e) => {
+                    const cur = Number(fields.altTimeDay) || 0;
+                    const next = e.target.checked ? cur | DAY_BITS[i] : cur & ~DAY_BITS[i];
+                    set("altTimeDay", String(next));
+                  }}
+                />
+                {day}
+              </label>
+            ))}
+          </div>
 
           <div className="group">{t("Network")}</div>
           <div className="kv-inline">
@@ -295,6 +437,116 @@ export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onN
             </label>
           </div>
 
+          <div className="group">{t("Peers and queue")}</div>
+          <div className="kv-inline">
+            <span className="muted">{t("Max peers overall")}</span>
+            <input
+              className="narrow"
+              value={fields.peerLimitGlobal}
+              onChange={(e) => set("peerLimitGlobal", e.target.value)}
+            />
+            <span className="muted">{t("per torrent")}</span>
+            <input
+              className="narrow"
+              value={fields.peerLimitTorrent}
+              onChange={(e) => set("peerLimitTorrent", e.target.value)}
+            />
+          </div>
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.downloadQueueEnabled}
+                onChange={(e) => set("downloadQueueEnabled", e.target.checked)}
+              />
+              {t("Download queue")}
+            </label>
+            <input
+              className="narrow"
+              value={fields.downloadQueueSize}
+              onChange={(e) => set("downloadQueueSize", e.target.value)}
+              disabled={!fields.downloadQueueEnabled}
+            />
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.seedQueueEnabled}
+                onChange={(e) => set("seedQueueEnabled", e.target.checked)}
+              />
+              {t("Seed queue")}
+            </label>
+            <input
+              className="narrow"
+              value={fields.seedQueueSize}
+              onChange={(e) => set("seedQueueSize", e.target.value)}
+              disabled={!fields.seedQueueEnabled}
+            />
+          </div>
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.queueStalledEnabled}
+                onChange={(e) => set("queueStalledEnabled", e.target.checked)}
+              />
+              {t("Stalled torrents leave the queue after")}
+            </label>
+            <input
+              className="narrow"
+              value={fields.queueStalledMinutes}
+              onChange={(e) => set("queueStalledMinutes", e.target.value)}
+              disabled={!fields.queueStalledEnabled}
+            />
+            <span className="muted">{t("min")}</span>
+          </div>
+          <div className="kv-inline">
+            <span className="muted">{t("Disk cache (MB)")}</span>
+            <input
+              className="narrow"
+              value={fields.cacheSizeMb}
+              onChange={(e) => set("cacheSizeMb", e.target.value)}
+            />
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.idleSeedingEnabled}
+                onChange={(e) => set("idleSeedingEnabled", e.target.checked)}
+              />
+              {t("Stop seeding when idle for")}
+            </label>
+            <input
+              className="narrow"
+              value={fields.idleSeedingLimit}
+              onChange={(e) => set("idleSeedingLimit", e.target.value)}
+              disabled={!fields.idleSeedingEnabled}
+            />
+            <span className="muted">{t("min")}</span>
+          </div>
+
+          <div className="group">{t("Blocklist")}</div>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={fields.blocklistEnabled}
+              onChange={(e) => set("blocklistEnabled", e.target.checked)}
+            />
+            {t("Enable blocklist")}
+          </label>
+          <label className="field">
+            <span>{t("Blocklist URL")}</span>
+            <input
+              className="mono"
+              value={fields.blocklistUrl}
+              onChange={(e) => set("blocklistUrl", e.target.value)}
+            />
+          </label>
+          <div className="kv-inline">
+            <button className="btn" onClick={updateBlocklist} disabled={blockBusy || busy}>
+              {blockBusy ? t("Updating…") : t("Update now")}
+            </button>
+            <span className="muted">{t("{n} rules loaded", { n: fields.blocklistSize })}</span>
+          </div>
+
           <div className="group">{t("Behavior")}</div>
           <label className="chk">
             <input
@@ -328,6 +580,22 @@ export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onN
               disabled={!fields.seedRatioLimited}
             />
           </div>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={fields.trashOriginal}
+              onChange={(e) => set("trashOriginal", e.target.checked)}
+            />
+            {t("Move original .torrent to the trash")}
+          </label>
+          <label className="field">
+            <span>{t("Default trackers")}</span>
+            <input
+              className="mono"
+              value={fields.defaultTrackers}
+              onChange={(e) => set("defaultTrackers", e.target.value)}
+            />
+          </label>
 
           {/* Client-side, so it sits apart from the daemon settings above. */}
           <div className="group">{t("This machine")}</div>

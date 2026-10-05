@@ -35,14 +35,44 @@ export const STATUS_FILTERS: StatusFilter[] = [
 
 export interface FilterOptions {
   text: string;
-  statusId: string;
+  selection: FilterSelection;
+}
+
+/**
+ * What the list is currently scoped to. `status` reuses the STATUS_FILTERS ids,
+ * `label`/`dir` compare against the torrent's own values.
+ */
+export interface FilterSelection {
+  kind: "all" | "status" | "label" | "dir";
+  value: string;
+}
+
+export const ALL_SELECTION: FilterSelection = { kind: "all", value: "" };
+
+/** The selection as a status-filter id, for the top-bar dropdown. */
+export function statusIdOf(sel: FilterSelection): string {
+  return sel.kind === "status" ? sel.value : "all";
+}
+
+export function matchesSelection(t: Torrent, sel: FilterSelection): boolean {
+  switch (sel.kind) {
+    case "all":
+      return true;
+    case "status": {
+      const f = STATUS_FILTERS.find((s) => s.id === sel.value);
+      return f ? f.test(t) : true;
+    }
+    case "label":
+      return (t.labels ?? []).includes(sel.value);
+    case "dir":
+      return t.downloadDir === sel.value;
+  }
 }
 
 export function filterTorrents(list: Torrent[], opts: FilterOptions): Torrent[] {
   const q = opts.text.trim().toLowerCase();
-  const status = STATUS_FILTERS.find((s) => s.id === opts.statusId) ?? STATUS_FILTERS[0];
   return list.filter((t) => {
-    if (!status.test(t)) return false;
+    if (!matchesSelection(t, opts.selection)) return false;
     if (!q) return true;
     if (t.name.toLowerCase().includes(q)) return true;
     if ((t.labels ?? []).some((l) => l.toLowerCase().includes(q))) return true;

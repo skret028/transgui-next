@@ -146,6 +146,28 @@ export interface SessionInfo {
   "seedRatioLimit": number;
   "seedRatioLimited": boolean;
   "port-forwarding-enabled": boolean;
+  "alt-speed-time-enabled": boolean;
+  /** Minutes since midnight, 0-1439. */
+  "alt-speed-time-begin": number;
+  "alt-speed-time-end": number;
+  /** Bit mask: 1 = Sunday, 2 = Monday, … 64 = Saturday. */
+  "alt-speed-time-day": number;
+  "peer-limit-global": number;
+  "peer-limit-per-torrent": number;
+  "download-queue-enabled": boolean;
+  "download-queue-size": number;
+  "seed-queue-enabled": boolean;
+  "seed-queue-size": number;
+  "queue-stalled-enabled": boolean;
+  "queue-stalled-minutes": number;
+  "cache-size-mb": number;
+  "idle-seeding-limit-enabled": boolean;
+  "idle-seeding-limit": number;
+  "blocklist-enabled": boolean;
+  "blocklist-url": string;
+  "blocklist-size": number;
+  "trash-original-torrent-files": boolean;
+  "default-trackers": string;
   [key: string]: unknown;
 }
 
