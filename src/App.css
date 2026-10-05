@@ -483,6 +483,36 @@ table.sub-table td.empty {
   font-size: 12px;
 }
 
+/* Small inline action buttons (row-level rename, copy …). */
+.btn.icon.small {
+  padding: 1px 5px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.col-act {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+.col-act .btn + .btn {
+  margin-left: 4px;
+}
+.tab-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.inline-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.inline-actions > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Compact rows for dialogs that stack several tables (e.g. statistics). */
 .settings-form.compact {
   line-height: 1.3;

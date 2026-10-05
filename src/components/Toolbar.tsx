@@ -88,10 +88,10 @@ export function Toolbar({
       <span className="spacer" />
 
       <button className="btn" onClick={() => onGlobalAction("start_all")} disabled={!connected}>
-        {t("Start all torrents")}
+        {t("Start all")}
       </button>
       <button className="btn" onClick={() => onGlobalAction("stop_all")} disabled={!connected}>
-        {t("Stop all torrents")}
+        {t("Stop all")}
       </button>
       <button className="btn" onClick={onOpenStats} disabled={!connected}>
         {t("Statistics")}

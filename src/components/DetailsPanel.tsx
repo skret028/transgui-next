@@ -1,8 +1,12 @@
 import { useState, type ReactNode } from "react";
 import type { FileStat, TorrentDetail } from "../types";
 import { useT } from "../i18n";
+import { rpc } from "../api";
+import { copyText } from "../clipboard";
 import type { TFn } from "../format";
 import { formatBytes, formatDate, formatDuration, formatPercent, formatRatio, formatSpeed } from "../format";
+import { PromptDialog } from "./PromptDialog";
+import { MoveLocationDialog } from "./MoveLocationDialog";
 
 interface Props {
   detail: TorrentDetail | null;
@@ -35,6 +39,9 @@ function filePriority(stat: FileStat | undefined, t: TFn): string {
   return t("Normal");
 }
 
+/** The trailing component of a torrent-relative path; that is what gets renamed. */
+const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <>
@@ -47,6 +54,18 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("info");
+  const [copied, setCopied] = useState("");
+  const [renaming, setRenaming] = useState<{ path: string; initial: string } | null>(null);
+  const [trackerAdd, setTrackerAdd] = useState(false);
+  const [trackerEdit, setTrackerEdit] = useState<{ id: number; url: string } | null>(null);
+  const [moving, setMoving] = useState(false);
+
+  const doCopy = async (what: string, text: string) => {
+    if (await copyText(text)) {
+      setCopied(what);
+      window.setTimeout(() => setCopied(""), 1500);
+    }
+  };
 
   if (!detail) {
     return (
@@ -60,6 +79,17 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
   const fileStats = detail.fileStats ?? [];
   const peers = detail.peers ?? [];
   const trackers = detail.trackerStats ?? [];
+
+  const copyBtn = (what: string, text: string) => (
+    <button
+      className="btn icon small"
+      title={t("Copy")}
+      onClick={() => void doCopy(what, text)}
+      disabled={!text}
+    >
+      ⧉
+    </button>
+  );
 
   return (
     <section className="details">
@@ -84,7 +114,11 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
           {detail.name}
         </span>
         <span className="spacer" />
+        {copied && <span className="up">{t("Copied")}</span>}
         {loading && <span className="muted">{t("Refreshing…")}</span>}
+        <button className="btn" onClick={() => setMoving(true)}>
+          {t("Move data")}…
+        </button>
         <button className="btn" onClick={onRefresh}>
           {t("Refresh")}
         </button>
@@ -96,8 +130,30 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
       <div className="details-body">
         {tab === "info" && (
           <div className="kv-grid">
-            <Row label={t("Name")} value={detail.name} />
-            <Row label={t("Hash")} value={<span className="mono">{detail.hashString}</span>} />
+            <Row
+              label={t("Name")}
+              value={
+                <span className="inline-actions">
+                  <span>{detail.name}</span>
+                  <button
+                    className="btn icon small"
+                    title={t("Rename")}
+                    onClick={() => setRenaming({ path: detail.name, initial: detail.name })}
+                  >
+                    ✎
+                  </button>
+                </span>
+              }
+            />
+            <Row
+              label={t("Hash")}
+              value={
+                <span className="inline-actions">
+                  <span className="mono">{detail.hashString}</span>
+                  {copyBtn("hash", detail.hashString)}
+                </span>
+              }
+            />
             <Row
               label={t("Size")}
               value={t("{size} (downloaded {down} / uploaded {up})", {
@@ -107,7 +163,15 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
               })}
             />
             <Row label={t("Ratio")} value={formatRatio(detail.uploadRatio)} />
-            <Row label={t("Download directory")} value={<span className="mono">{detail.downloadDir}</span>} />
+            <Row
+              label={t("Download directory")}
+              value={
+                <span className="inline-actions">
+                  <span className="mono ellipsis">{detail.downloadDir}</span>
+                  {copyBtn("dir", detail.downloadDir)}
+                </span>
+              }
+            />
             <Row label={t("Added")} value={formatDate(detail.addedDate)} />
             <Row label={t("Completed")} value={detail.doneDate > 0 ? formatDate(detail.doneDate) : "-"} />
             <Row label={t("Last activity")} value={formatDate(detail.activityDate)} />
@@ -129,7 +193,15 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
             <Row label={t("Private torrent")} value={detail.isPrivate ? t("Yes") : t("No")} />
             <Row label={t("Creator")} value={detail.creator || "-"} />
             <Row label={t("Comment")} value={detail.comment || "-"} />
-            <Row label={t("Magnet")} value={<span className="mono ellipsis">{detail.magnetLink}</span>} />
+            <Row
+              label={t("Magnet")}
+              value={
+                <span className="inline-actions">
+                  <span className="mono ellipsis">{detail.magnetLink}</span>
+                  {copyBtn("magnet", detail.magnetLink)}
+                </span>
+              }
+            />
           </div>
         )}
 
@@ -141,12 +213,13 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
                 <th className="num">{t("Size")}</th>
                 <th className="col-prog">{t("Done")}</th>
                 <th>{t("Priority")}</th>
+                <th className="col-act" />
               </tr>
             </thead>
             <tbody>
               {files.length === 0 && (
                 <tr>
-                  <td className="empty" colSpan={4}>
+                  <td className="empty" colSpan={5}>
                     {t("No file information")}
                   </td>
                 </tr>
@@ -166,6 +239,15 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
                       </div>
                     </td>
                     <td>{filePriority(fileStats[i], t)}</td>
+                    <td className="col-act">
+                      <button
+                        className="btn icon small"
+                        title={t("Rename")}
+                        onClick={() => setRenaming({ path: f.name, initial: basename(f.name) })}
+                      >
+                        ✎
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -213,41 +295,125 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
         )}
 
         {tab === "trackers" && (
-          <table className="sub-table">
-            <thead>
-              <tr>
-                <th>{t("Tracker")}</th>
-                <th>{t("Status")}</th>
-                <th className="num">{t("Seeds")}</th>
-                <th className="num">{t("Leechers")}</th>
-                <th>{t("Last result")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {trackers.length === 0 && (
+          <>
+            <div className="tab-actions">
+              <button className="btn" onClick={() => setTrackerAdd(true)}>
+                {t("Add tracker")}…
+              </button>
+            </div>
+            <table className="sub-table">
+              <thead>
                 <tr>
-                  <td className="empty" colSpan={5}>
-                    {t("No tracker information")}
-                  </td>
+                  <th>{t("Tracker")}</th>
+                  <th>{t("Status")}</th>
+                  <th className="num">{t("Seeds")}</th>
+                  <th className="num">{t("Leechers")}</th>
+                  <th>{t("Last result")}</th>
+                  <th className="col-act" />
                 </tr>
-              )}
-              {trackers.map((tr, i) => (
-                <tr key={i}>
-                  <td className="mono ellipsis" title={tr.announce}>
-                    {tr.host || tr.announce}
-                  </td>
-                  <td>{ANNOUNCE_KEY[tr.announceState] ? t(ANNOUNCE_KEY[tr.announceState]) : "?"}</td>
-                  <td className="num">{tr.seederCount}</td>
-                  <td className="num">{tr.leecherCount}</td>
-                  <td className={tr.lastAnnounceSucceeded ? "up" : "down"}>
-                    {tr.lastAnnounceResult || "-"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {trackers.length === 0 && (
+                  <tr>
+                    <td className="empty" colSpan={6}>
+                      {t("No tracker information")}
+                    </td>
+                  </tr>
+                )}
+                {trackers.map((tr) => (
+                  <tr key={tr.id}>
+                    <td className="mono ellipsis" title={tr.announce}>
+                      {tr.host || tr.announce}
+                    </td>
+                    <td>{ANNOUNCE_KEY[tr.announceState] ? t(ANNOUNCE_KEY[tr.announceState]) : "?"}</td>
+                    <td className="num">{tr.seederCount}</td>
+                    <td className="num">{tr.leecherCount}</td>
+                    <td className={tr.lastAnnounceSucceeded ? "up" : "down"}>
+                      {tr.lastAnnounceResult || "-"}
+                    </td>
+                    <td className="col-act">
+                      <button
+                        className="btn icon small"
+                        title={t("Edit tracker")}
+                        onClick={() => setTrackerEdit({ id: tr.id, url: tr.announce })}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        className="btn icon small danger"
+                        title={t("Remove tracker")}
+                        onClick={() => {
+                          void (async () => {
+                            await rpc.setTorrent([detail.id], { trackerRemove: [tr.id] });
+                            onRefresh();
+                          })();
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
       </div>
+
+      {renaming && (
+        <PromptDialog
+          title={t("Rename")}
+          label={t("New name")}
+          context={renaming.path}
+          initial={renaming.initial}
+          submitLabel={t("Rename")}
+          onClose={() => setRenaming(null)}
+          onSubmit={async (name) => {
+            await rpc.renamePath(detail.id, renaming.path, name);
+            onRefresh();
+          }}
+        />
+      )}
+
+      {trackerAdd && (
+        <PromptDialog
+          title={t("Add tracker")}
+          label={t("Tracker URL")}
+          placeholder="udp://tracker.example:6969/announce"
+          submitLabel={t("Add")}
+          onClose={() => setTrackerAdd(false)}
+          onSubmit={async (url) => {
+            await rpc.setTorrent([detail.id], { trackerAdd: [url] });
+            onRefresh();
+          }}
+        />
+      )}
+
+      {trackerEdit && (
+        <PromptDialog
+          title={t("Edit tracker")}
+          label={t("Tracker URL")}
+          initial={trackerEdit.url}
+          submitLabel={t("Apply")}
+          onClose={() => setTrackerEdit(null)}
+          onSubmit={async (url) => {
+            await rpc.setTorrent([detail.id], { trackerReplace: [trackerEdit.id, url] });
+            onRefresh();
+          }}
+        />
+      )}
+
+      {moving && (
+        <MoveLocationDialog
+          count={1}
+          current={detail.downloadDir}
+          onClose={() => setMoving(false)}
+          onSubmit={async (location, moveData) => {
+            await rpc.setLocation([detail.id], location, moveData);
+            onRefresh();
+          }}
+        />
+      )}
     </section>
   );
 }
