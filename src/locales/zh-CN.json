@@ -530,6 +530,7 @@
   "Move the data on disk": "同时在磁盘上移动数据",
   "If unchecked, only the recorded location changes.": "不勾选则只改记录位置，不移动实际文件。",
   "Move…": "移动…",
+  "Current location": "当前位置",
 
   "Stalled": "卡住",
   "dur.day_hour": "{d}天 {h}时",

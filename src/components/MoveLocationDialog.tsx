@@ -49,7 +49,8 @@ export function MoveLocationDialog({ count, current, onClose, onSubmit }: Props)
       }
     >
       <p className="muted">
-        {t("{n} selected", { n: count })} · {t("Current")}: <span className="mono">{current}</span>
+        {t("{n} selected", { n: count })} · {t("Current location")}:{" "}
+        <span className="mono">{current}</span>
       </p>
       {error && <div className="error inline">{error}</div>}
       <label className="field">
