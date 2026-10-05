@@ -38,7 +38,6 @@ interface Fields {
   dht: boolean;
   pex: boolean;
   lpd: boolean;
-  utp: boolean;
   startAdded: boolean;
   renamePartial: boolean;
   seedRatioLimit: string;
@@ -65,9 +64,24 @@ interface Fields {
   blocklistSize: number;
   trashOriginal: boolean;
   defaultTrackers: string;
+  sequential: boolean;
+  transportTcp: boolean;
+  transportUtp: boolean;
+  abfEnabled: boolean;
+  abfThreshold: string;
+  scriptAddedEnabled: boolean;
+  scriptAddedFilename: string;
+  scriptDoneEnabled: boolean;
+  scriptDoneFilename: string;
+  scriptSeedingEnabled: boolean;
+  scriptSeedingFilename: string;
 }
 
 const numStr = (v: unknown) => (v == null ? "" : String(v));
+
+/** preferred_transports arrives as an array; daemons that lack it send none. */
+const transports = (s: SessionInfo): string[] =>
+  Array.isArray(s.preferred_transports) ? s.preferred_transports : [];
 
 /** Sunday-first bits, matching how Transmission encodes alt-speed-time-day. */
 const DAY_BITS = [1, 2, 4, 8, 16, 32, 64];
@@ -109,7 +123,6 @@ function fromSession(s: SessionInfo): Fields {
     dht: !!s["dht-enabled"],
     pex: !!s["pex-enabled"],
     lpd: !!s["lpd-enabled"],
-    utp: !!s["utp-enabled"],
     startAdded: !!s["start-added-torrents"],
     renamePartial: !!s["rename-partial-files"],
     seedRatioLimit: numStr(s["seedRatioLimit"]),
@@ -134,6 +147,17 @@ function fromSession(s: SessionInfo): Fields {
     blocklistSize: Number(s["blocklist-size"] ?? 0),
     trashOriginal: !!s["trash-original-torrent-files"],
     defaultTrackers: String(s["default-trackers"] ?? ""),
+    sequential: !!s["sequential_download"],
+    transportTcp: transports(s).includes("tcp"),
+    transportUtp: transports(s).includes("utp"),
+    abfEnabled: !!s["anti-brute-force-enabled"],
+    abfThreshold: numStr(s["anti-brute-force-threshold"]),
+    scriptAddedEnabled: !!s["script-torrent-added-enabled"],
+    scriptAddedFilename: String(s["script-torrent-added-filename"] ?? ""),
+    scriptDoneEnabled: !!s["script-torrent-done-enabled"],
+    scriptDoneFilename: String(s["script-torrent-done-filename"] ?? ""),
+    scriptSeedingEnabled: !!s["script-torrent-done-seeding-enabled"],
+    scriptSeedingFilename: String(s["script-torrent-done-seeding-filename"] ?? ""),
   };
 }
 
@@ -160,7 +184,8 @@ function toPatch(f: Fields): Record<string, unknown> {
     "dht-enabled": f.dht,
     "pex-enabled": f.pex,
     "lpd-enabled": f.lpd,
-    "utp-enabled": f.utp,
+    // Legacy alias kept in step with preferred_transports for older daemons.
+    "utp-enabled": f.transportUtp,
     "start-added-torrents": f.startAdded,
     "rename-partial-files": f.renamePartial,
     seedRatioLimit: n(f.seedRatioLimit),
@@ -185,7 +210,26 @@ function toPatch(f: Fields): Record<string, unknown> {
     // blocklist-size is an accessor; the daemon owns it.
     "trash-original-torrent-files": f.trashOriginal,
     "default-trackers": f.defaultTrackers.trim(),
+    sequential_download: f.sequential,
+    // The daemon wants an array here; an empty one would leave it with no way
+    // to reach peers, so keep TCP as the floor.
+    preferred_transports: tcpFloor(f),
+    "anti-brute-force-enabled": f.abfEnabled,
+    "anti-brute-force-threshold": n(f.abfThreshold),
+    "script-torrent-added-enabled": f.scriptAddedEnabled,
+    "script-torrent-added-filename": f.scriptAddedFilename.trim(),
+    "script-torrent-done-enabled": f.scriptDoneEnabled,
+    "script-torrent-done-filename": f.scriptDoneFilename.trim(),
+    "script-torrent-done-seeding-enabled": f.scriptSeedingEnabled,
+    "script-torrent-done-seeding-filename": f.scriptSeedingFilename.trim(),
   };
+}
+
+function tcpFloor(f: Fields): string[] {
+  const list: string[] = [];
+  if (f.transportTcp) list.push("tcp");
+  if (f.transportUtp) list.push("utp");
+  return list.length > 0 ? list : ["tcp"];
 }
 
 export function SettingsDialog({
@@ -463,10 +507,40 @@ export function SettingsDialog({
               <input type="checkbox" checked={fields.lpd} onChange={(e) => set("lpd", e.target.checked)} />
               LPD
             </label>
+          </div>
+          <div className="kv-inline">
+            <span className="muted">{t("Transports")}</span>
             <label className="chk">
-              <input type="checkbox" checked={fields.utp} onChange={(e) => set("utp", e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={fields.transportTcp}
+                onChange={(e) => set("transportTcp", e.target.checked)}
+              />
+              TCP
+            </label>
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.transportUtp}
+                onChange={(e) => set("transportUtp", e.target.checked)}
+              />
               µTP
             </label>
+          </div>
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.abfEnabled}
+                onChange={(e) => set("abfEnabled", e.target.checked)}
+              />
+              {t("Refuse brute-force RPC attempts after")}
+            </label>
+            <input
+              className="narrow"
+              value={fields.abfThreshold}
+              onChange={(e) => set("abfThreshold", e.target.value)}
+            />
           </div>
 
           <div className="group">{t("Peers and queue")}</div>
@@ -591,6 +665,14 @@ export function SettingsDialog({
           <label className="chk">
             <input
               type="checkbox"
+              checked={fields.sequential}
+              onChange={(e) => set("sequential", e.target.checked)}
+            />
+            {t("Download pieces in order")}
+          </label>
+          <label className="chk">
+            <input
+              type="checkbox"
               checked={fields.renamePartial}
               onChange={(e) => set("renamePartial", e.target.checked)}
             />
@@ -628,6 +710,54 @@ export function SettingsDialog({
               onChange={(e) => set("defaultTrackers", e.target.value)}
             />
           </label>
+
+          <div className="group">{t("Event scripts")}</div>
+          <p className="muted">{t("Run a command on the daemon when an event happens.")}</p>
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.scriptAddedEnabled}
+                onChange={(e) => set("scriptAddedEnabled", e.target.checked)}
+              />
+              {t("Torrent added")}
+            </label>
+            <input
+              className="mono"
+              value={fields.scriptAddedFilename}
+              onChange={(e) => set("scriptAddedFilename", e.target.value)}
+            />
+          </div>
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.scriptDoneEnabled}
+                onChange={(e) => set("scriptDoneEnabled", e.target.checked)}
+              />
+              {t("Download finished")}
+            </label>
+            <input
+              className="mono"
+              value={fields.scriptDoneFilename}
+              onChange={(e) => set("scriptDoneFilename", e.target.value)}
+            />
+          </div>
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.scriptSeedingEnabled}
+                onChange={(e) => set("scriptSeedingEnabled", e.target.checked)}
+              />
+              {t("Seeding finished")}
+            </label>
+            <input
+              className="mono"
+              value={fields.scriptSeedingFilename}
+              onChange={(e) => set("scriptSeedingFilename", e.target.value)}
+            />
+          </div>
 
           {/* Client-side, so it sits apart from the daemon settings above. */}
           <div className="group">{t("This machine")}</div>

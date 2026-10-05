@@ -695,6 +695,11 @@ table.sub-table td.empty {
 .kv-inline input.narrow {
   width: 90px;
 }
+/* Script paths need room; the checkbox stays put on the left. */
+.kv-inline input.mono {
+  flex: 1;
+  min-width: 160px;
+}
 .group {
   color: #7cc4f5;
   font-size: 12px;

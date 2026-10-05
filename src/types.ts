@@ -168,6 +168,18 @@ export interface SessionInfo {
   "blocklist-size": number;
   "trash-original-torrent-files": boolean;
   "default-trackers": string;
+  /** Session default: fetch pieces in order instead of rarest-first. */
+  sequential_download: boolean;
+  /** Transports allowed for peer connections, e.g. ["tcp", "utp"]. */
+  preferred_transports?: string[];
+  "anti-brute-force-enabled": boolean;
+  "anti-brute-force-threshold": number;
+  "script-torrent-added-enabled": boolean;
+  "script-torrent-added-filename": string;
+  "script-torrent-done-enabled": boolean;
+  "script-torrent-done-filename": string;
+  "script-torrent-done-seeding-enabled": boolean;
+  "script-torrent-done-seeding-filename": string;
   [key: string]: unknown;
 }
 

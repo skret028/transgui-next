@@ -581,5 +581,13 @@
   "That settings file has no version": "这个设置文件缺少版本号",
   "That settings file was written by a newer version of transgui-next": "这个设置文件来自更新版本的 transgui-next",
   "Passwords in the file were ignored": "文件里的密码已被忽略",
-  "No settings found in that file": "这个文件里没有可导入的设置"
+  "No settings found in that file": "这个文件里没有可导入的设置",
+  "Transports": "传输协议",
+  "Refuse brute-force RPC attempts after": "连续失败后拒绝 RPC 暴力尝试（次）",
+  "Download pieces in order": "顺序下载（适合边下边看）",
+  "Event scripts": "事件脚本",
+  "Run a command on the daemon when an event happens.": "事件发生时，由 daemon 执行一条命令。",
+  "Torrent added": "添加种子时",
+  "Download finished": "下载完成时",
+  "Seeding finished": "做种完成时"
 }
