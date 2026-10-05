@@ -589,5 +589,13 @@
   "Run a command on the daemon when an event happens.": "事件发生时，由 daemon 执行一条命令。",
   "Torrent added": "添加种子时",
   "Download finished": "下载完成时",
-  "Seeding finished": "做种完成时"
+  "Seeding finished": "做种完成时",
+  "Country lookup": "国家/地区查找",
+  "Peer countries come from a database you download on demand. Addresses are never sent anywhere.": "节点所属国家来自按需下载的数据库；地址不会发送到任何地方（查找全在本机完成）。",
+  "Working…": "处理中…",
+  "Installed": "已安装",
+  "Not installed": "未安装",
+  "Data: DB-IP Lite (CC BY 4.0)": "数据：DB-IP Lite（CC BY 4.0）",
+  "Download…": "下载…",
+  "Update": "更新"
 }

@@ -71,4 +71,18 @@ export const rpc = {
   writeTextFile: (path: string, contents: string) =>
     invoke<unknown>("write_text_file", { path, contents }),
   readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
+
+  /** Optional country database: downloaded on demand, looked up locally. */
+  geoipStatus: () => invoke<GeoIpStatus>("geoip_status"),
+  geoipDownload: () => invoke<GeoIpStatus>("geoip_download"),
+  geoipClear: () => invoke<GeoIpStatus>("geoip_clear"),
+  geoipLookup: (ips: string[]) => invoke<Record<string, string>>("geoip_lookup", { ips }),
 };
+
+export interface GeoIpStatus {
+  installed: boolean;
+  entries: number;
+  bytes: number;
+  /** Seconds since the epoch, or null when not installed. */
+  updatedAt: number | null;
+}

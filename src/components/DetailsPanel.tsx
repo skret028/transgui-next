@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { FileStat, TorrentDetail } from "../types";
 import { useT } from "../i18n";
 import { rpc } from "../api";
@@ -22,6 +22,18 @@ interface Props {
 }
 
 type Tab = "info" | "files" | "peers" | "trackers";
+
+/**
+ * Regional-indicator pair for a two-letter country code, so flags need no image
+ * assets. Returns "" for anything that is not a country code.
+ */
+function flagEmoji(code: string): string {
+  if (code.length !== 2) return "";
+  const upper = code.toUpperCase();
+  const points = [...upper].map((c) => 0x1f1e6 + (c.charCodeAt(0) - 65));
+  if (points.some((p) => p < 0x1f1e6 || p > 0x1f1ff)) return "";
+  return String.fromCodePoint(...points);
+}
 
 const TABS: { id: Tab; labelKey: string }[] = [
   { id: "info", labelKey: "General" },
@@ -85,6 +97,34 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
   const fileStats = detail.fileStats ?? [];
   const peers = detail.peers ?? [];
   const trackers = detail.trackerStats ?? [];
+
+  // Countries come from the optional database; without it the column stays
+  // empty rather than guessing. Keyed on the address set so the details refresh
+  // every couple of seconds does not re-ask for the same list.
+  const [countries, setCountries] = useState<Record<string, string>>({});
+  const peerKey = useMemo(
+    () => [...new Set(peers.map((p) => p.address).filter(Boolean))].sort().join("|"),
+    [peers],
+  );
+  useEffect(() => {
+    const list = peerKey ? peerKey.split("|") : [];
+    if (list.length === 0) {
+      setCountries({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const found = await rpc.geoipLookup(list);
+        if (!cancelled) setCountries(found);
+      } catch {
+        // Optional feature: no database just means no flags.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [peerKey]);
 
   const copyBtn = (what: string, text: string) => (
     <button
@@ -290,6 +330,7 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
             <thead>
               <tr>
                 <th>{t("Address")}</th>
+                <th>{t("Country")}</th>
                 <th>{t("Client")}</th>
                 <th>{t("Flags")}</th>
                 <th className="col-prog">{t("Progress")}</th>
@@ -300,7 +341,7 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
             <tbody>
               {peers.length === 0 && (
                 <tr>
-                  <td className="empty" colSpan={6}>
+                  <td className="empty" colSpan={7}>
                     {t("No connected peers")}
                   </td>
                 </tr>
@@ -308,6 +349,11 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
               {peers.map((p, i) => (
                 <tr key={i}>
                   <td className="mono">{p.address}</td>
+                  <td className="mono">
+                    {countries[p.address]
+                      ? `${flagEmoji(countries[p.address])} ${countries[p.address]}`
+                      : "-"}
+                  </td>
                   <td>{p.clientName || "-"}</td>
                   <td className="mono">{p.flagStr}</td>
                   <td className="col-prog">

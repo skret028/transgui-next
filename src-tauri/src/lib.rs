@@ -1,5 +1,6 @@
 //! Application wiring: plugins, RPC state, system tray, and the global hotkey.
 
+mod geoip;
 mod rpc;
 
 use rpc::AppState;
@@ -218,8 +219,13 @@ pub fn run() {
             rpc_reveal_path,
             write_text_file,
             read_text_file,
+            geoip::geoip_status,
+            geoip::geoip_download,
+            geoip::geoip_clear,
+            geoip::geoip_lookup,
         ])
         .setup(|app| {
+            app.manage(geoip::GeoIp::default());
             let handle = app.handle().clone();
             build_tray(&handle)?;
             if let Err(e) = register_global_shortcut(&handle) {

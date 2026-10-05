@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
-import { rpc } from "../api";
+import { rpc, type GeoIpStatus } from "../api";
 import type { SessionInfo } from "../types";
 import type { PathMapping } from "../paths";
 
@@ -252,6 +252,9 @@ export function SettingsDialog({
   const [blockBusy, setBlockBusy] = useState(false);
   const [fileBusy, setFileBusy] = useState(false);
   const [fileMsg, setFileMsg] = useState("");
+  const [geo, setGeo] = useState<GeoIpStatus | null>(null);
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoMsg, setGeoMsg] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -320,6 +323,28 @@ export function SettingsDialog({
       setFileMsg(String(e));
     } finally {
       setFileBusy(false);
+    }
+  };
+
+  // The country database is optional and lives outside the daemon.
+  useEffect(() => {
+    void (async () => {
+      try {
+        setGeo(await rpc.geoipStatus());
+      } catch {
+        setGeo(null);
+      }
+    })();
+  }, []);
+  const runGeo = async (action: () => Promise<GeoIpStatus>) => {
+    setGeoBusy(true);
+    setGeoMsg("");
+    try {
+      setGeo(await action());
+    } catch (e) {
+      setGeoMsg(String(e));
+    } finally {
+      setGeoBusy(false);
     }
   };
 
@@ -841,6 +866,38 @@ export function SettingsDialog({
               </button>
               {fileMsg && <span className="muted">{fileMsg}</span>}
             </div>
+          </div>
+
+          <div className="settings-file">
+            <div className="pathmap-head">
+              <span>{t("Country lookup")}</span>
+            </div>
+            <p className="muted">
+              {t("Peer countries come from a database you download on demand. Addresses are never sent anywhere.")}
+            </p>
+            <div className="inline-actions">
+              <button className="btn" disabled={geoBusy} onClick={() => void runGeo(rpc.geoipDownload)}>
+                {geo?.installed ? t("Update") : t("Download")}…
+              </button>
+              {geo?.installed && (
+                <button
+                  className="btn danger"
+                  disabled={geoBusy}
+                  onClick={() => void runGeo(rpc.geoipClear)}
+                >
+                  {t("Remove")}
+                </button>
+              )}
+              <span className="muted">
+                {geoBusy
+                  ? t("Working…")
+                  : geo?.installed
+                    ? `${t("Installed")} · ${geo.entries.toLocaleString()} · ${(geo.bytes / 1048576).toFixed(1)} MB · ${new Date((geo.updatedAt ?? 0) * 1000).toLocaleDateString()}`
+                    : t("Not installed")}
+              </span>
+            </div>
+            {geoMsg && <p className="muted">{geoMsg}</p>}
+            <p className="muted">{t("Data: DB-IP Lite (CC BY 4.0)")}</p>
           </div>
         </div>
       )}
