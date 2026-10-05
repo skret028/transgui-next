@@ -1,6 +1,7 @@
 // Connection settings persistence via tauri-plugin-store.
 import { load, type Store } from "@tauri-apps/plugin-store";
 import type { ConnForm, ServerBookmark } from "./types";
+import { normalizePathMap, type PathMapping } from "./paths";
 
 const FILE = "settings.json";
 const KEY = "connection";
@@ -109,5 +110,23 @@ export async function loadNotifyOnComplete(): Promise<boolean> {
 export async function saveNotifyOnComplete(on: boolean): Promise<void> {
   const store = await getStore();
   await store.set(NOTIFY_KEY, on);
+  await store.save();
+}
+
+const PATH_MAP_KEY = "pathMap";
+
+/** Maps daemon-side path prefixes onto this machine's view. */
+export async function loadPathMap(): Promise<PathMapping[]> {
+  try {
+    const store = await getStore();
+    return normalizePathMap(await store.get<unknown>(PATH_MAP_KEY));
+  } catch {
+    return [];
+  }
+}
+
+export async function savePathMap(list: PathMapping[]): Promise<void> {
+  const store = await getStore();
+  await store.set(PATH_MAP_KEY, list);
   await store.save();
 }

@@ -51,6 +51,10 @@ jobs:
       - name: Type-check and build frontend
         run: pnpm build
 
+      # Pure-logic assertions (Node strips the types itself, no build needed).
+      - name: Frontend unit tests
+        run: pnpm test
+
       # The live RPC test is #[ignore]d: it needs a real transmission daemon,
       # which CI does not have. See src-tauri/src/rpc.rs.
       - name: Rust tests

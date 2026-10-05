@@ -11,8 +11,12 @@ import { MoveLocationDialog } from "./MoveLocationDialog";
 interface Props {
   detail: TorrentDetail | null;
   loading: boolean;
-  /** The daemon's files are on this machine, so revealing them makes sense. */
-  canReveal: boolean;
+  /**
+   * Local path to hand the OS for `detail.downloadDir` — the daemon path when
+   * it shares this filesystem, else translated through the path mapping.
+   * null when it cannot be opened from here.
+   */
+  revealTarget: string | null;
   onClose: () => void;
   onRefresh: () => void;
 }
@@ -53,7 +57,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function DetailsPanel({ detail, loading, canReveal, onClose, onRefresh }: Props) {
+export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh }: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("info");
   const [copied, setCopied] = useState("");
@@ -118,15 +122,19 @@ export function DetailsPanel({ detail, loading, canReveal, onClose, onRefresh }:
         <span className="spacer" />
         {copied && <span className="up">{t("Copied")}</span>}
         {loading && <span className="muted">{t("Refreshing…")}</span>}
-        {canReveal && (
-          <button
-            className="btn"
-            title={t("Only available when the daemon runs on this machine")}
-            onClick={() => void rpc.revealPath(detail.downloadDir)}
-          >
-            {t("Show in folder")}
-          </button>
-        )}
+        <button
+          className="btn"
+          disabled={!revealTarget}
+          title={
+            revealTarget ??
+            t("Set a path mapping to open the daemon's folders from this machine")
+          }
+          onClick={() => {
+            if (revealTarget) void rpc.revealPath(revealTarget);
+          }}
+        >
+          {t("Show in folder")}
+        </button>
         <button className="btn" onClick={() => setMoving(true)}>
           {t("Move data")}…
         </button>
@@ -183,6 +191,17 @@ export function DetailsPanel({ detail, loading, canReveal, onClose, onRefresh }:
                 </span>
               }
             />
+            {revealTarget && revealTarget !== detail.downloadDir && (
+              <Row
+                label={t("Local path")}
+                value={
+                  <span className="inline-actions">
+                    <span className="mono ellipsis">{revealTarget}</span>
+                    {copyBtn("local", revealTarget)}
+                  </span>
+                }
+              />
+            )}
             <Row label={t("Added")} value={formatDate(detail.addedDate)} />
             <Row label={t("Completed")} value={detail.doneDate > 0 ? formatDate(detail.doneDate) : "-"} />
             <Row label={t("Last activity")} value={formatDate(detail.activityDate)} />

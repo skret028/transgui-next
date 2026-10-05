@@ -747,3 +747,44 @@ table.sub-table td.empty {
   font-weight: 600;
   pointer-events: none;
 }
+
+/* ---- path mapping rows (settings → This machine) ---- */
+.pathmap {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #2c323b;
+}
+.pathmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pathmap-head > span {
+  font-size: 12px;
+  color: #9aa4b2;
+}
+.pathmap-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.pathmap-row input {
+  min-width: 0;
+  background: #14171b;
+  border: 1px solid #363c46;
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.pathmap-row input:focus {
+  border-color: #3b82f6;
+}
+.pathmap-arrow {
+  color: #7b8794;
+  font-size: 12px;
+}

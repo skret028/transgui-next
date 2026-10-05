@@ -543,7 +543,6 @@
   "This machine": "本机",
   "Kept on this machine, not on the daemon.": "保存在本机，不写入 daemon。",
   "Show in folder": "在文件夹中显示",
-  "Only available when the daemon runs on this machine": "仅当 daemon 运行在本机时可用",
   "Peers and queue": "连接与队列",
   "Max peers overall": "全局最大连接数",
   "per torrent": "每个种子",
@@ -562,5 +561,12 @@
   "To": "到",
   "On days": "生效日",
   "Move original .torrent to the trash": "把原始 .torrent 移入废纸篓",
-  "Default trackers": "默认 Tracker"
+  "Default trackers": "默认 Tracker",
+  "Path mapping": "路径映射",
+  "Add row": "添加一行",
+  "Daemon paths → this machine. Longest matching prefix wins.": "daemon 路径 → 本机路径（最长前缀优先匹配）",
+  "No mappings yet.": "还没有映射。",
+  "Remote path": "daemon 路径",
+  "Local path": "本机路径",
+  "Set a path mapping to open the daemon's folders from this machine": "设置路径映射后，才能在本机打开 daemon 上的目录"
 }

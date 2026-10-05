@@ -10,13 +10,16 @@ import {
   loadConnForm,
   loadLocale,
   loadNotifyOnComplete,
+  loadPathMap,
   loadServers,
   saveColumns,
   saveConnForm,
   saveLocale,
   saveNotifyOnComplete,
+  savePathMap,
   saveServers,
 } from "./settings";
+import { revealPathFor, type PathMapping } from "./paths";
 import {
   ALL_SELECTION,
   filterTorrents,
@@ -57,9 +60,6 @@ import { invoke } from "@tauri-apps/api/core";
 
 const REFRESH_MS = 2000;
 
-/** Hosts whose filesystem this app can see. */
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
-
 function AppInner() {
   const t = useT();
   const { locale, setLocale } = useI18n();
@@ -80,6 +80,7 @@ function AppInner() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [columns, setColumns] = useState<ColumnId[]>(DEFAULT_COLUMNS);
   const [notifyOnComplete, setNotifyOnComplete] = useState(true);
+  const [pathMap, setPathMap] = useState<PathMapping[]>([]);
   /** Transient status-bar message, e.g. a just-finished download. */
   const [flash, setFlash] = useState("");
 
@@ -116,9 +117,12 @@ function AppInner() {
     [torrents, filterText, filterSel, sortKey, sortDir],
   );
 
-  // Revealing a path only means something when the daemon shares this
-  // filesystem; for a remote daemon the path may not exist here at all.
-  const canReveal = LOCAL_HOSTS.has(form.host.trim().toLowerCase());
+  // Which local path "Show in folder" opens: the daemon's own path when it
+  // shares this filesystem, otherwise the mapped one. null = not openable.
+  const revealTarget = useMemo(
+    () => (detail ? revealPathFor(detail.downloadDir, form.host, pathMap) : null),
+    [detail, form.host, pathMap],
+  );
 
   const knownLabels = useMemo(() => {
     const set = new Set<string>();
@@ -196,11 +200,13 @@ function AppInner() {
       const savedServers = await loadServers();
       const savedColumns = await loadColumns();
       const notifyPref = await loadNotifyOnComplete();
+      const savedPathMap = await loadPathMap();
       if (cancelled) return;
       setForm(saved);
       setServers(savedServers);
       setColumns(normalizeColumns(savedColumns));
       setNotifyOnComplete(notifyPref);
+      setPathMap(savedPathMap);
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -422,6 +428,11 @@ function AppInner() {
   const changeNotify = useCallback((on: boolean) => {
     setNotifyOnComplete(on);
     void saveNotifyOnComplete(on);
+  }, []);
+
+  const changePathMap = useCallback((list: PathMapping[]) => {
+    setPathMap(list);
+    void savePathMap(list);
   }, []);
 
   // Add a .torrent (or magnet) the OS asked us to open.
@@ -650,7 +661,7 @@ function AppInner() {
           <DetailsPanel
             detail={detail}
             loading={detailLoading}
-            canReveal={canReveal}
+            revealTarget={revealTarget}
             onClose={() => {
               detailIdRef.current = null;
               setDetail(null);
@@ -684,6 +695,8 @@ function AppInner() {
           onApply={applySettings}
           notifyOnComplete={notifyOnComplete}
           onNotifyChange={changeNotify}
+          pathMap={pathMap}
+          onPathMapChange={changePathMap}
         />
       )}
 

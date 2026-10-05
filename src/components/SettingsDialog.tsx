@@ -3,6 +3,7 @@ import { Modal } from "./Modal";
 import { useT } from "../i18n";
 import { rpc } from "../api";
 import type { SessionInfo } from "../types";
+import type { PathMapping } from "../paths";
 
 interface Props {
   onLoad: () => Promise<SessionInfo>;
@@ -11,6 +12,9 @@ interface Props {
   /** Client-side preference: kept in the local store, not on the daemon. */
   notifyOnComplete: boolean;
   onNotifyChange: (on: boolean) => void;
+  /** Client-side too: how daemon paths map onto this machine. */
+  pathMap: PathMapping[];
+  onPathMapChange: (list: PathMapping[]) => void;
 }
 
 interface Fields {
@@ -181,7 +185,15 @@ function toPatch(f: Fields): Record<string, unknown> {
   };
 }
 
-export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onNotifyChange }: Props) {
+export function SettingsDialog({
+  onLoad,
+  onClose,
+  onApply,
+  notifyOnComplete,
+  onNotifyChange,
+  pathMap,
+  onPathMapChange,
+}: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
   const [busy, setBusy] = useState(false);
@@ -608,6 +620,54 @@ export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onN
             {t("Notify me when a download finishes")}
           </label>
           <p className="muted">{t("Kept on this machine, not on the daemon.")}</p>
+
+          <div className="pathmap">
+            <div className="pathmap-head">
+              <span>{t("Path mapping")}</span>
+              <button
+                className="btn icon small"
+                onClick={() => onPathMapChange([...pathMap, { remote: "", local: "" }])}
+              >
+                {t("Add row")}
+              </button>
+            </div>
+            <p className="muted">
+              {t("Daemon paths → this machine. Longest matching prefix wins.")}
+            </p>
+            {pathMap.length === 0 && <p className="muted">{t("No mappings yet.")}</p>}
+            {pathMap.map((m, i) => (
+              <div className="pathmap-row" key={i}>
+                <input
+                  className="mono"
+                  value={m.remote}
+                  placeholder={t("Remote path")}
+                  onChange={(e) =>
+                    onPathMapChange(
+                      pathMap.map((x, j) => (j === i ? { ...x, remote: e.target.value } : x)),
+                    )
+                  }
+                />
+                <span className="pathmap-arrow">→</span>
+                <input
+                  className="mono"
+                  value={m.local}
+                  placeholder={t("Local path")}
+                  onChange={(e) =>
+                    onPathMapChange(
+                      pathMap.map((x, j) => (j === i ? { ...x, local: e.target.value } : x)),
+                    )
+                  }
+                />
+                <button
+                  className="btn icon small"
+                  title={t("Remove")}
+                  onClick={() => onPathMapChange(pathMap.filter((_, j) => j !== i))}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </Modal>
