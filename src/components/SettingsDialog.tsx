@@ -15,6 +15,9 @@ interface Props {
   /** Client-side too: how daemon paths map onto this machine. */
   pathMap: PathMapping[];
   onPathMapChange: (list: PathMapping[]) => void;
+  /** Resolve to a status message, or throw/"" to stay quiet (e.g. cancelled). */
+  onExportSettings: () => Promise<string>;
+  onImportSettings: () => Promise<string>;
 }
 
 interface Fields {
@@ -193,6 +196,8 @@ export function SettingsDialog({
   onNotifyChange,
   pathMap,
   onPathMapChange,
+  onExportSettings,
+  onImportSettings,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -201,6 +206,8 @@ export function SettingsDialog({
   const [portBusy, setPortBusy] = useState(false);
   const [portOpen, setPortOpen] = useState<boolean | null>(null);
   const [blockBusy, setBlockBusy] = useState(false);
+  const [fileBusy, setFileBusy] = useState(false);
+  const [fileMsg, setFileMsg] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -256,6 +263,19 @@ export function SettingsDialog({
       setError(String(e));
     } finally {
       setBlockBusy(false);
+    }
+  };
+
+  // Export/import run through the app, which owns the settings state.
+  const runFile = async (action: () => Promise<string>) => {
+    setFileBusy(true);
+    setFileMsg("");
+    try {
+      setFileMsg(await action());
+    } catch (e) {
+      setFileMsg(String(e));
+    } finally {
+      setFileBusy(false);
     }
   };
 
@@ -667,6 +687,30 @@ export function SettingsDialog({
                 </button>
               </div>
             ))}
+          </div>
+
+          <div className="settings-file">
+            <div className="pathmap-head">
+              <span>{t("Settings file")}</span>
+            </div>
+            <p className="muted">{t("Passwords are never written to an exported file.")}</p>
+            <div className="inline-actions">
+              <button
+                className="btn"
+                disabled={fileBusy}
+                onClick={() => void runFile(onExportSettings)}
+              >
+                {t("Export…")}
+              </button>
+              <button
+                className="btn"
+                disabled={fileBusy}
+                onClick={() => void runFile(onImportSettings)}
+              >
+                {t("Import…")}
+              </button>
+              {fileMsg && <span className="muted">{fileMsg}</span>}
+            </div>
           </div>
         </div>
       )}

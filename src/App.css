@@ -754,6 +754,11 @@ table.sub-table td.empty {
   padding-top: 10px;
   border-top: 1px solid #2c323b;
 }
+.settings-file {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #2c323b;
+}
 .pathmap-head {
   display: flex;
   align-items: center;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { ask } from "@tauri-apps/plugin-dialog";
+import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { rpc } from "./api";
 import {
@@ -20,6 +20,7 @@ import {
   saveServers,
 } from "./settings";
 import { revealPathFor, type PathMapping } from "./paths";
+import { buildSettingsFile, parseSettingsFile } from "./settingsFile";
 import {
   ALL_SELECTION,
   filterTorrents,
@@ -435,6 +436,88 @@ function AppInner() {
     void savePathMap(list);
   }, []);
 
+  // Settings export/import. Passwords are never written out.
+  const exportSettings = useCallback(async (): Promise<string> => {
+    const payload = buildSettingsFile({
+      form,
+      servers,
+      locale,
+      columns,
+      notifyOnComplete,
+      pathMap,
+    });
+    const target = await save({
+      defaultPath: "transgui-next-settings.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (!target) return "";
+    await rpc.writeTextFile(target, JSON.stringify(payload, null, 2) + "\n");
+    return `${t("Exported to")} ${target}`;
+  }, [form, servers, locale, columns, notifyOnComplete, pathMap, t]);
+
+  const importSettings = useCallback(async (): Promise<string> => {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (typeof picked !== "string") return "";
+    const parsed = parseSettingsFile(await rpc.readTextFile(picked));
+    if (!parsed.ok) throw new Error(t(parsed.error));
+    const s = parsed.settings;
+
+    if (s.form) {
+      // The file carries no password: keep ours when it is the same server,
+      // otherwise the imported entry has to be filled in by hand.
+      const merged = { ...s.form, password: s.form.host === form.host ? form.password : "" };
+      const reconnects =
+        merged.host !== form.host ||
+        merged.port !== form.port ||
+        merged.path !== form.path ||
+        merged.username !== form.username ||
+        merged.https !== form.https ||
+        merged.acceptInvalid !== form.acceptInvalid;
+      setForm(merged);
+      void saveConnForm(merged);
+      if (reconnects) void connect(merged);
+    }
+    if (s.servers) {
+      // Same rule as the connection above: match the stored password by server.
+      const bookmarks = s.servers.map((sv) => {
+        const known = servers.find(
+          (c) => c.form.host === sv.form.host && c.form.port === sv.form.port,
+        );
+        return {
+          id: sv.id || sv.form.host,
+          name: sv.name || sv.form.host,
+          form: { ...sv.form, password: known?.form.password ?? "" },
+        };
+      });
+      setServers(bookmarks);
+      void saveServers(bookmarks);
+    }
+    if (s.locale) {
+      setLocale(s.locale);
+      void saveLocale(s.locale);
+    }
+    if (s.columns) {
+      setColumns(s.columns);
+      void saveColumns(s.columns);
+    }
+    if (typeof s.notifyOnComplete === "boolean") {
+      setNotifyOnComplete(s.notifyOnComplete);
+      void saveNotifyOnComplete(s.notifyOnComplete);
+    }
+    if (s.pathMap) {
+      setPathMap(s.pathMap);
+      void savePathMap(s.pathMap);
+    }
+
+    const base = t("Imported");
+    return parsed.warnings.length
+      ? `${base} · ${parsed.warnings.map((w) => t(w)).join("; ")}`
+      : base;
+  }, [form, servers, connect, t]);
+
   // Add a .torrent (or magnet) the OS asked us to open.
   const addFromOs = useCallback(
     async (target: string) => {
@@ -697,6 +780,8 @@ function AppInner() {
           onNotifyChange={changeNotify}
           pathMap={pathMap}
           onPathMapChange={changePathMap}
+          onExportSettings={exportSettings}
+          onImportSettings={importSettings}
         />
       )}
 

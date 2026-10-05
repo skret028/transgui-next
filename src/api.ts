@@ -66,4 +66,9 @@ export const rpc = {
 
   /** Reveal a path in the OS file manager (only meaningful for a local daemon). */
   revealPath: (path: string) => invoke<unknown>("rpc_reveal_path", { path }),
+
+  /** Settings export/import: plain text files at paths the user picked. */
+  writeTextFile: (path: string, contents: string) =>
+    invoke<unknown>("write_text_file", { path, contents }),
+  readTextFile: (path: string) => invoke<string>("read_text_file", { path }),
 };

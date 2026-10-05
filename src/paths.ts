@@ -4,6 +4,10 @@
  * A daemon on a NAS or in a container reports its own filesystem view
  * ("/downloads"), which usually does not exist here. A mapping table pairs a
  * daemon-side prefix with the prefix this machine mounts it under.
+ *
+ * Keep this module free of runtime imports: scripts/paths.test.ts loads it
+ * directly under Node (which needs explicit file extensions on relative
+ * imports), and that only works while there is nothing to resolve.
  */
 
 export interface PathMapping {

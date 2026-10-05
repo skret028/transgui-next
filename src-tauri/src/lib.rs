@@ -92,6 +92,18 @@ fn rpc_reveal_path(app: AppHandle, path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Write text to a path the user picked (settings export).
+#[tauri::command]
+fn write_text_file(path: String, contents: String) -> Result<(), String> {
+    std::fs::write(&path, contents).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Read a text file the user picked (settings import).
+#[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
@@ -204,6 +216,8 @@ pub fn run() {
             rpc::rpc_set_location,
             take_pending_opens,
             rpc_reveal_path,
+            write_text_file,
+            read_text_file,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
