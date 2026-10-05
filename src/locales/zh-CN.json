@@ -531,10 +531,17 @@
   "If unchecked, only the recorded location changes.": "不勾选则只改记录位置，不移动实际文件。",
   "Move…": "移动…",
   "Current location": "当前位置",
-
   "Stalled": "卡住",
   "dur.day_hour": "{d}天 {h}时",
   "dur.hour_min": "{h}时 {m}分",
   "dur.min_sec": "{m}分 {s}秒",
-  "dur.sec": "{s}秒"
+  "dur.sec": "{s}秒",
+  "Columns": "列",
+  "Choose which columns the torrent list shows.": "选择种子列表显示哪些列。",
+  "Restore defaults": "恢复默认",
+  "Notify me when a download finishes": "下载完成时通知我",
+  "This machine": "本机",
+  "Kept on this machine, not on the daemon.": "保存在本机，不写入 daemon。",
+  "Show in folder": "在文件夹中显示",
+  "Only available when the daemon runs on this machine": "仅当 daemon 运行在本机时可用"
 }

@@ -12,6 +12,86 @@ use tauri::{AppHandle, Manager, WindowEvent};
 /// button can hide-to-tray instead of quitting.
 pub struct QuitFlag(pub AtomicBool);
 
+/// Paths and magnet links the OS asked us to open.
+///
+/// A file-open request can arrive before the webview has registered its
+/// listener (that is the normal case when the app is *launched* by opening a
+/// .torrent). Those get parked here and the frontend drains them once it is
+/// listening; after that, requests are pushed straight through as events.
+#[derive(Default)]
+pub struct PendingOpens {
+    list: std::sync::Mutex<Vec<String>>,
+    frontend_ready: AtomicBool,
+}
+
+/// A command-line argument we know how to open.
+fn is_openable(arg: &str) -> bool {
+    let lower = arg.to_ascii_lowercase();
+    lower.ends_with(".torrent") || lower.starts_with("magnet:")
+}
+
+fn queue_open(app: &AppHandle, target: String) {
+    use tauri::Emitter;
+    let Some(state) = app.try_state::<PendingOpens>() else {
+        return;
+    };
+    if state.frontend_ready.load(Ordering::SeqCst) {
+        let _ = app.emit("open-torrent", target);
+        return;
+    }
+    // Bind the guard rather than using `if let Ok(g) = ...`: the temporary
+    // Result would outlive `state` and fail to borrow-check.
+    let mut list = match state.list.lock() {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+    if !list.contains(&target) {
+        list.push(target);
+    }
+}
+
+/// Run-loop events: macOS and iOS deliver file-open requests here rather than
+/// through the command line.
+fn handle_run_event(handle: &AppHandle, event: tauri::RunEvent) {
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    if let tauri::RunEvent::Opened { urls } = event {
+        for url in urls {
+            if url.scheme() == "magnet" {
+                queue_open(handle, url.to_string());
+            } else if let Ok(path) = url.to_file_path() {
+                queue_open(handle, path.to_string_lossy().into_owned());
+            }
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+    let _ = (handle, event);
+}
+
+/// Drain the parked open requests. Called once by the frontend on mount, which
+/// also marks the frontend as listening for live events.
+#[tauri::command]
+fn take_pending_opens(state: tauri::State<'_, PendingOpens>) -> Vec<String> {
+    state.frontend_ready.store(true, Ordering::SeqCst);
+    match state.list.lock() {
+        Ok(mut list) => std::mem::take(&mut *list),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Reveal a path in the OS file manager.
+///
+/// Done here rather than through the JS opener API on purpose: the JS side
+/// would need a filesystem scope wide enough to cover any download directory,
+/// while the Rust call has no such restriction and the UI already gates the
+/// button on the daemon being local.
+#[tauri::command]
+fn rpc_reveal_path(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .reveal_item_in_dir(&path)
+        .map_err(|e| e.to_string())
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
@@ -87,10 +167,11 @@ fn register_global_shortcut(app: &AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -103,6 +184,7 @@ pub fn run() {
         )
         .manage(AppState::new())
         .manage(QuitFlag(AtomicBool::new(false)))
+        .manage(PendingOpens::default())
         .invoke_handler(tauri::generate_handler![
             rpc::rpc_connect,
             rpc::rpc_disconnect,
@@ -119,12 +201,19 @@ pub fn run() {
             rpc::rpc_port_test,
             rpc::rpc_rename_path,
             rpc::rpc_set_location,
+            take_pending_opens,
+            rpc_reveal_path,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             build_tray(&handle)?;
             if let Err(e) = register_global_shortcut(&handle) {
                 eprintln!("global shortcut registration failed: {e}");
+            }
+            // A .torrent path or magnet link on the command line: the Windows
+            // and Linux route, and macOS when launched from a shell.
+            for arg in std::env::args().skip(1).filter(|a| is_openable(a)) {
+                queue_open(&handle, arg);
             }
             Ok(())
         })
@@ -142,6 +231,8 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(handle_run_event);
 }

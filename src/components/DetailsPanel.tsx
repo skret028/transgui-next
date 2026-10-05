@@ -11,6 +11,8 @@ import { MoveLocationDialog } from "./MoveLocationDialog";
 interface Props {
   detail: TorrentDetail | null;
   loading: boolean;
+  /** The daemon's files are on this machine, so revealing them makes sense. */
+  canReveal: boolean;
   onClose: () => void;
   onRefresh: () => void;
 }
@@ -51,7 +53,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
+export function DetailsPanel({ detail, loading, canReveal, onClose, onRefresh }: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("info");
   const [copied, setCopied] = useState("");
@@ -116,6 +118,15 @@ export function DetailsPanel({ detail, loading, onClose, onRefresh }: Props) {
         <span className="spacer" />
         {copied && <span className="up">{t("Copied")}</span>}
         {loading && <span className="muted">{t("Refreshing…")}</span>}
+        {canReveal && (
+          <button
+            className="btn"
+            title={t("Only available when the daemon runs on this machine")}
+            onClick={() => void rpc.revealPath(detail.downloadDir)}
+          >
+            {t("Show in folder")}
+          </button>
+        )}
         <button className="btn" onClick={() => setMoving(true)}>
           {t("Move data")}…
         </button>

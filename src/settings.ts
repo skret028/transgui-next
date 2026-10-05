@@ -76,3 +76,38 @@ export async function saveLocale(code: string): Promise<void> {
   await store.set(LOCALE_KEY, code);
   await store.save();
 }
+
+const COLUMNS_KEY = "columns";
+
+export async function loadColumns(): Promise<unknown> {
+  try {
+    const store = await getStore();
+    return await store.get<unknown>(COLUMNS_KEY);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function saveColumns(columns: string[]): Promise<void> {
+  const store = await getStore();
+  await store.set(COLUMNS_KEY, columns);
+  await store.save();
+}
+
+const NOTIFY_KEY = "notifyOnComplete";
+
+/** Notify when a torrent finishes downloading. Defaults to on. */
+export async function loadNotifyOnComplete(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(NOTIFY_KEY)) ?? true;
+  } catch {
+    return true;
+  }
+}
+
+export async function saveNotifyOnComplete(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(NOTIFY_KEY, on);
+  await store.save();
+}

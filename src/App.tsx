@@ -6,16 +6,22 @@ import "./App.css";
 import { rpc } from "./api";
 import {
   DEFAULT_FORM,
+  loadColumns,
   loadConnForm,
   loadLocale,
+  loadNotifyOnComplete,
   loadServers,
+  saveColumns,
   saveConnForm,
   saveLocale,
+  saveNotifyOnComplete,
   saveServers,
 } from "./settings";
 import {
   filterTorrents,
   nextDir,
+  pickNewlyFinished,
+  seedFinished,
   sortTorrents,
   STATUS_FILTERS,
   type SortDir,
@@ -39,8 +45,16 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
 import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
 import { StatsDialog } from "./components/StatsDialog";
+import { ColumnsDialog } from "./components/ColumnsDialog";
+import { DEFAULT_COLUMNS, normalizeColumns, type ColumnId } from "./columns";
+import { notify } from "./notify";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 
 const REFRESH_MS = 2000;
+
+/** Hosts whose filesystem this app can see. */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 function AppInner() {
   const t = useT();
@@ -60,6 +74,10 @@ function AppInner() {
 
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [columns, setColumns] = useState<ColumnId[]>(DEFAULT_COLUMNS);
+  const [notifyOnComplete, setNotifyOnComplete] = useState(true);
+  /** Transient status-bar message, e.g. a just-finished download. */
+  const [flash, setFlash] = useState("");
 
   const [detail, setDetail] = useState<TorrentDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -69,6 +87,7 @@ function AppInner() {
   const [showLabels, setShowLabels] = useState(false);
   const [showProps, setShowProps] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showColumns, setShowColumns] = useState(false);
   const [statsDir, setStatsDir] = useState("");
   const [dragging, setDragging] = useState(false);
 
@@ -78,6 +97,10 @@ function AppInner() {
   const timer = useRef<number | null>(null);
   const anchor = useRef<number | null>(null);
   const detailIdRef = useRef<number | null>(null);
+  /** Torrent ids already accounted for by the completion notifier. */
+  const notifiedRef = useRef<Set<number>>(new Set());
+  /** Whether the baseline (first list of the session) has been taken. */
+  const seededRef = useRef(false);
 
   const visible = useMemo(
     () =>
@@ -88,6 +111,10 @@ function AppInner() {
       ),
     [torrents, filterText, filterStatus, sortKey, sortDir],
   );
+
+  // Revealing a path only means something when the daemon shares this
+  // filesystem; for a remote daemon the path may not exist here at all.
+  const canReveal = LOCAL_HOSTS.has(form.host.trim().toLowerCase());
 
   const knownLabels = useMemo(() => {
     const set = new Set<string>();
@@ -163,9 +190,13 @@ function AppInner() {
     void (async () => {
       const { form: saved, saved: hasSaved } = await loadConnForm();
       const savedServers = await loadServers();
+      const savedColumns = await loadColumns();
+      const notifyPref = await loadNotifyOnComplete();
       if (cancelled) return;
       setForm(saved);
       setServers(savedServers);
+      setColumns(normalizeColumns(savedColumns));
+      setNotifyOnComplete(notifyPref);
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -374,6 +405,88 @@ function AppInner() {
     return () => unlisten?.();
   }, [refresh, t]);
 
+  const applyColumns = useCallback((cols: ColumnId[]) => {
+    const normalized = normalizeColumns(cols);
+    setColumns(normalized);
+    void saveColumns(normalized);
+  }, []);
+
+  const changeNotify = useCallback((on: boolean) => {
+    setNotifyOnComplete(on);
+    void saveNotifyOnComplete(on);
+  }, []);
+
+  // Add a .torrent (or magnet) the OS asked us to open.
+  const addFromOs = useCallback(
+    async (target: string) => {
+      try {
+        await rpc.add(
+          target.toLowerCase().startsWith("magnet:")
+            ? { filename: target }
+            : { local_torrent_path: target },
+        );
+        await refresh();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [refresh],
+  );
+
+  // File associations: register the listener first, then drain whatever the OS
+  // queued before the webview was up - that is the normal case when the app is
+  // launched by opening a .torrent, so an event-only listener would miss it.
+  //
+  // Gated on `connected`: on a cold launch the file arrives while the RPC
+  // connection is still being established, and adding a torrent then just fails
+  // with "not connected". Until we drain, the backend keeps queueing, so
+  // nothing is lost by waiting.
+  useEffect(() => {
+    if (!connected) return;
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        unlisten = await listen<string>("open-torrent", (e) => {
+          void addFromOs(e.payload);
+        });
+        for (const target of await invoke<string[]>("take_pending_opens")) {
+          void addFromOs(target);
+        }
+      } catch {
+        // not running under Tauri
+      }
+    })();
+    return () => unlisten?.();
+  }, [connected, addFromOs]);
+
+  // Tell the user once per torrent that finishes downloading.
+  useEffect(() => {
+    if (!connected) {
+      // Fresh session: forget everything so a reconnect re-baselines instead of
+      // re-announcing the whole library.
+      notifiedRef.current = new Set();
+      seededRef.current = false;
+      return;
+    }
+    if (!notifyOnComplete) return;
+    if (!seededRef.current) {
+      // Wait for the first real list, then treat it as the baseline: whatever
+      // was already complete when we connected is not news.
+      if (torrents.length === 0) return;
+      seedFinished(torrents, notifiedRef.current);
+      seededRef.current = true;
+      return;
+    }
+    for (const x of pickNewlyFinished(torrents, notifiedRef.current)) {
+      notifiedRef.current.add(x.id);
+      // In-app echo as well: an OS notification can be missed (or refused), and
+      // this also makes the trigger observable without a notification centre.
+      setFlash(`${t("Download complete")}: ${x.name}`);
+      window.setTimeout(() => setFlash(""), 8000);
+      void notify(x.name, t("Download complete"));
+    }
+  }, [torrents, connected, notifyOnComplete, t]);
+
   // Keep an open details panel following the current selection.
   useEffect(() => {
     if (detailIdRef.current != null && !selection.has(detailIdRef.current) && selection.size > 0) {
@@ -466,6 +579,9 @@ function AppInner() {
             </option>
           ))}
         </select>
+        <button className="btn" onClick={() => setShowColumns(true)}>
+          {t("Columns")}…
+        </button>
       </header>
 
       <ConnectionBar
@@ -510,6 +626,7 @@ function AppInner() {
         sortKey={sortKey}
         sortDir={sortDir}
         selection={selection}
+        columns={columns}
         onSort={onSort}
         onRowClick={onRowClick}
         onToggleAll={toggleAll}
@@ -519,6 +636,7 @@ function AppInner() {
       <DetailsPanel
         detail={detail}
         loading={detailLoading}
+        canReveal={canReveal}
         onClose={() => {
           detailIdRef.current = null;
           setDetail(null);
@@ -535,6 +653,7 @@ function AppInner() {
         </span>
         {selection.size > 0 && <span>{t("{n} selected", { n: selection.size })}</span>}
         <span className="spacer" />
+        {flash && <span className="up">{flash}</span>}
         {lastUpdate && <span>{t("Updated {time}", { time: lastUpdate.toLocaleTimeString() })}</span>}
       </footer>
 
@@ -547,6 +666,8 @@ function AppInner() {
           onLoad={() => rpc.session()}
           onClose={() => setShowSettings(false)}
           onApply={applySettings}
+          notifyOnComplete={notifyOnComplete}
+          onNotifyChange={changeNotify}
         />
       )}
 
@@ -571,6 +692,14 @@ function AppInner() {
 
       {showStats && (
         <StatsDialog downloadDir={statsDir} onClose={() => setShowStats(false)} />
+      )}
+
+      {showColumns && (
+        <ColumnsDialog
+          columns={columns}
+          onClose={() => setShowColumns(false)}
+          onApply={applyColumns}
+        />
       )}
     </div>
   );

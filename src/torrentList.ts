@@ -12,6 +12,7 @@ export type SortKey =
   | "uploadRatio"
   | "eta"
   | "addedDate"
+  | "downloadedEver"
   | "queuePosition";
 
 export type SortDir = "asc" | "desc";
@@ -68,4 +69,25 @@ export function sortTorrents(list: Torrent[], key: SortKey, dir: SortDir): Torre
 export function nextDir(current: SortDir, isSameKey: boolean): SortDir {
   if (!isSameKey) return "asc";
   return current === "asc" ? "desc" : "asc";
+}
+
+/** A torrent has all of its data. */
+export function isFinished(t: Torrent): boolean {
+  return (t.percentDone ?? 0) >= 1;
+}
+
+/**
+ * Torrents that have finished but were not complete when we last looked.
+ *
+ * `seen` is the caller's running set of ids already accounted for (complete
+ * torrents present at startup go straight into it), so this never fires a burst
+ * of notifications for a library that was already finished.
+ */
+export function pickNewlyFinished(list: Torrent[], seen: Set<number>): Torrent[] {
+  return list.filter((t) => isFinished(t) && !seen.has(t.id));
+}
+
+/** Seed `seen` with everything already complete, e.g. right after connecting. */
+export function seedFinished(list: Torrent[], seen: Set<number>): void {
+  for (const t of list) if (isFinished(t)) seen.add(t.id);
 }

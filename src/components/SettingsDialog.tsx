@@ -8,6 +8,9 @@ interface Props {
   onLoad: () => Promise<SessionInfo>;
   onClose: () => void;
   onApply: (patch: Record<string, unknown>) => Promise<void>;
+  /** Client-side preference: kept in the local store, not on the daemon. */
+  notifyOnComplete: boolean;
+  onNotifyChange: (on: boolean) => void;
 }
 
 interface Fields {
@@ -95,7 +98,7 @@ function toPatch(f: Fields): Record<string, unknown> {
   };
 }
 
-export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
+export function SettingsDialog({ onLoad, onClose, onApply, notifyOnComplete, onNotifyChange }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
   const [busy, setBusy] = useState(false);
@@ -325,6 +328,18 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
               disabled={!fields.seedRatioLimited}
             />
           </div>
+
+          {/* Client-side, so it sits apart from the daemon settings above. */}
+          <div className="group">{t("This machine")}</div>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={notifyOnComplete}
+              onChange={(e) => onNotifyChange(e.target.checked)}
+            />
+            {t("Notify me when a download finishes")}
+          </label>
+          <p className="muted">{t("Kept on this machine, not on the daemon.")}</p>
         </div>
       )}
     </Modal>

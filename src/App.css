@@ -571,6 +571,17 @@ table.sub-table td.empty {
   padding: 10px 14px;
   border-top: 1px solid #313640;
 }
+/* Two-column checklist used by the column picker. */
+.col-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+.col-picker .chk {
+  display: flex;
+  margin: 0;
+}
 .btn.icon {
   padding: 3px 9px;
 }

@@ -60,4 +60,7 @@ export const rpc = {
 
   setLocation: (ids: number[], location: string, moveData: boolean) =>
     invoke<unknown>("rpc_set_location", { ids, location, moveData }),
+
+  /** Reveal a path in the OS file manager (only meaningful for a local daemon). */
+  revealPath: (path: string) => invoke<unknown>("rpc_reveal_path", { path }),
 };
