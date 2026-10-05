@@ -114,6 +114,11 @@ pub fn run() {
             rpc::rpc_set_labels,
             rpc::rpc_torrent_set,
             rpc::rpc_add_torrent,
+            rpc::rpc_session_stats,
+            rpc::rpc_free_space,
+            rpc::rpc_port_test,
+            rpc::rpc_rename_path,
+            rpc::rpc_set_location,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

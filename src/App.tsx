@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { ask } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { rpc } from "./api";
 import {
@@ -37,6 +38,7 @@ import { AddTorrentDialog } from "./components/AddTorrentDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
 import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
+import { StatsDialog } from "./components/StatsDialog";
 
 const REFRESH_MS = 2000;
 
@@ -66,6 +68,8 @@ function AppInner() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [showProps, setShowProps] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [statsDir, setStatsDir] = useState("");
   const [dragging, setDragging] = useState(false);
 
   const [servers, setServers] = useState<ServerBookmark[]>([]);
@@ -237,6 +241,15 @@ function AppInner() {
         setError(t("Select a torrent in the list first"));
         return;
       }
+      // Destroying the payload is the one irreversible action here, so it gets
+      // its own name and an explicit confirmation.
+      if (act === "remove_with_data") {
+        const ok = await ask(
+          t("Delete {n} torrent(s) and their downloaded data?", { n: ids.length }),
+          { title: t("Remove and delete data"), kind: "warning" },
+        );
+        if (!ok) return;
+      }
       try {
         await rpc.action(act, ids);
         await refresh();
@@ -247,6 +260,30 @@ function AppInner() {
     },
     [selection, refresh, refreshDetail, t],
   );
+
+  /** Actions that apply to every torrent and need no selection. */
+  const globalAction = useCallback(
+    async (act: string) => {
+      try {
+        await rpc.action(act, []);
+        await refresh();
+        await refreshDetail();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [refresh, refreshDetail],
+  );
+
+  const openStats = useCallback(async () => {
+    try {
+      const s = await rpc.session();
+      setStatsDir(String(s["download-dir"] ?? ""));
+    } catch {
+      setStatsDir("");
+    }
+    setShowStats(true);
+  }, []);
 
   const submitAdd = useCallback(
     async (options: AddTorrentOptions) => {
@@ -453,10 +490,12 @@ function AppInner() {
         autoRefresh={autoRefresh}
         refreshMs={REFRESH_MS}
         onAction={action}
+        onGlobalAction={globalAction}
         onOpenAdd={() => setShowAdd(true)}
         onOpenSettings={() => setShowSettings(true)}
         onOpenLabels={() => setShowLabels(true)}
         onOpenProps={() => setShowProps(true)}
+        onOpenStats={openStats}
         onRefresh={() => {
           void refresh();
           void refreshDetail();
@@ -528,6 +567,10 @@ function AppInner() {
           onClose={() => setShowProps(false)}
           onApply={applyProps}
         />
+      )}
+
+      {showStats && (
+        <StatsDialog downloadDir={statsDir} onClose={() => setShowStats(false)} />
       )}
     </div>
   );

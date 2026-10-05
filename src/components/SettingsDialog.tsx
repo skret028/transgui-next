@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
+import { rpc } from "../api";
 import type { SessionInfo } from "../types";
 
 interface Props {
@@ -22,6 +23,7 @@ interface Fields {
   altEnabled: boolean;
   peerPort: string;
   peerPortRandom: boolean;
+  portForwarding: boolean;
   encryption: string;
   dht: boolean;
   pex: boolean;
@@ -49,6 +51,7 @@ function fromSession(s: SessionInfo): Fields {
     altEnabled: !!s["alt-speed-enabled"],
     peerPort: numStr(s["peer-port"]),
     peerPortRandom: !!s["peer-port-random-on-start"],
+    portForwarding: !!s["port-forwarding-enabled"],
     encryption: String(s.encryption ?? "preferred"),
     dht: !!s["dht-enabled"],
     pex: !!s["pex-enabled"],
@@ -79,6 +82,7 @@ function toPatch(f: Fields): Record<string, unknown> {
     "alt-speed-enabled": f.altEnabled,
     "peer-port": n(f.peerPort),
     "peer-port-random-on-start": f.peerPortRandom,
+    "port-forwarding-enabled": f.portForwarding,
     encryption: f.encryption,
     "dht-enabled": f.dht,
     "pex-enabled": f.pex,
@@ -96,6 +100,8 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
   const [fields, setFields] = useState<Fields | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [portBusy, setPortBusy] = useState(false);
+  const [portOpen, setPortOpen] = useState<boolean | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -120,6 +126,21 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
       setError(String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Ask the daemon to probe its own peer port. This is a daemon-side test: it
+  // does not tell us anything about our connection to it.
+  const testPort = async () => {
+    setPortBusy(true);
+    setPortOpen(null);
+    try {
+      const res = await rpc.portTest();
+      setPortOpen(!!res["port-is-open"]);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPortBusy(false);
     }
   };
 
@@ -225,6 +246,24 @@ export function SettingsDialog({ onLoad, onClose, onApply }: Props) {
               />
               {t("Randomize on start")}
             </label>
+          </div>
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fields.portForwarding}
+                onChange={(e) => set("portForwarding", e.target.checked)}
+              />
+              {t("Enable port forwarding")}
+            </label>
+            <button className="btn" onClick={testPort} disabled={portBusy || busy}>
+              {portBusy ? t("Testing…") : t("Test port")}
+            </button>
+            {portOpen !== null && (
+              <span className={portOpen ? "up" : "down"}>
+                {portOpen ? t("Port is open") : t("Port is closed")}
+              </span>
+            )}
           </div>
           <label className="field">
             <span>{t("Encryption")}</span>

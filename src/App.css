@@ -483,6 +483,23 @@ table.sub-table td.empty {
   font-size: 12px;
 }
 
+/* Compact rows for dialogs that stack several tables (e.g. statistics). */
+.settings-form.compact {
+  line-height: 1.3;
+}
+.settings-form.compact .kv-grid {
+  gap: 0 10px;
+}
+.settings-form.compact .kv-key,
+.settings-form.compact .kv-val {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.settings-form.compact .group {
+  margin-top: 7px;
+  margin-bottom: 2px;
+}
+
 /* ---- modal / dialogs ---- */
 .modal-backdrop {
   position: fixed;
@@ -498,7 +515,7 @@ table.sub-table td.empty {
   border: 1px solid #363c46;
   border-radius: 10px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  max-height: 86vh;
+  max-height: 92vh;
   display: flex;
   flex-direction: column;
 }

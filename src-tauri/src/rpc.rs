@@ -310,6 +310,8 @@ pub async fn rpc_torrent_details(
 }
 
 /// Map a UI action to a Transmission method and call it.
+///
+/// `start_all` / `stop_all` act on every torrent (no `ids` argument).
 #[tauri::command]
 pub async fn rpc_torrent_action(
     state: State<'_, AppState>,
@@ -322,15 +324,96 @@ pub async fn rpc_torrent_action(
         "stop" => "torrent-stop",
         "verify" => "torrent-verify",
         "reannounce" => "torrent-reannounce",
-        "remove" => "torrent-remove",
+        "remove" | "remove_with_data" => "torrent-remove",
+        // The queue moves are ordinary torrent actions in the RPC spec.
+        "queue_up" => "queue-move-up",
+        "queue_down" => "queue-move-down",
+        "queue_top" => "queue-move-top",
+        "queue_bottom" => "queue-move-bottom",
+        "start_all" => "torrent-start",
+        "stop_all" => "torrent-stop",
         _ => return Err(format!("未知操作：{action}")),
     };
-    let mut args = json!({ "ids": ids });
-    if action == "remove" {
-        // P0: never delete data implicitly.
-        args["delete-local-data"] = json!(false);
+
+    let mut args = json!({});
+    let global = matches!(action.as_str(), "start_all" | "stop_all");
+    if !global {
+        if ids.is_empty() {
+            return Err("未选择种子".into());
+        }
+        args["ids"] = json!(ids);
+    }
+    // Deleting the payload is never implicit: it needs its own action name, and
+    // the UI confirms before sending it.
+    match action.as_str() {
+        "remove" => args["delete-local-data"] = json!(false),
+        "remove_with_data" => args["delete-local-data"] = json!(true),
+        _ => {}
     }
     rpc_call(state.inner(), method, args).await
+}
+
+/// Session statistics: torrent counts, live speeds and cumulative totals.
+#[tauri::command]
+pub async fn rpc_session_stats(state: State<'_, AppState>) -> Result<Value, String> {
+    rpc_call(state.inner(), "session-stats", json!({})).await
+}
+
+/// Free space on the daemon host at `path`.
+#[tauri::command]
+pub async fn rpc_free_space(state: State<'_, AppState>, path: String) -> Result<Value, String> {
+    rpc_call(state.inner(), "free-space", json!({ "path": path })).await
+}
+
+/// Ask the daemon to test whether its incoming peer port is reachable.
+#[tauri::command]
+pub async fn rpc_port_test(state: State<'_, AppState>) -> Result<Value, String> {
+    rpc_call(state.inner(), "port-test", json!({})).await
+}
+
+/// Rename a file or folder inside a torrent (torrent-rename-path).
+#[tauri::command]
+pub async fn rpc_rename_path(
+    state: State<'_, AppState>,
+    id: i64,
+    path: String,
+    name: String,
+) -> Result<Value, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("新名称不能为空".into());
+    }
+    rpc_call(
+        state.inner(),
+        "torrent-rename-path",
+        json!({ "ids": [id], "path": path, "name": name }),
+    )
+    .await
+}
+
+/// Move a torrent's data to another folder on the daemon host.
+#[tauri::command]
+pub async fn rpc_set_location(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    location: String,
+    // `move` is a Rust keyword, so the argument is named `move_data`; the RPC
+    // field still has to be called `move`.
+    move_data: bool,
+) -> Result<Value, String> {
+    let location = location.trim();
+    if ids.is_empty() {
+        return Err("未选择种子".into());
+    }
+    if location.is_empty() {
+        return Err("目标目录不能为空".into());
+    }
+    rpc_call(
+        state.inner(),
+        "torrent-set-location",
+        json!({ "ids": ids, "location": location, "move": move_data }),
+    )
+    .await
 }
 
 /// Apply a `session-set` patch (server/transfer settings).

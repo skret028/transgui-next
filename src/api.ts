@@ -5,7 +5,10 @@ import type {
   AddTorrentOptions,
   ConnectResult,
   ConnForm,
+  FreeSpace,
+  PortTest,
   SessionInfo,
+  SessionStats,
   Torrent,
   TorrentDetail,
 } from "./types";
@@ -45,4 +48,16 @@ export const rpc = {
     invoke<unknown>("rpc_torrent_set", { ids, patch }),
 
   add: (options: AddTorrentOptions) => invoke<unknown>("rpc_add_torrent", { options }),
+
+  sessionStats: () => invoke<SessionStats>("rpc_session_stats"),
+
+  freeSpace: (path: string) => invoke<FreeSpace>("rpc_free_space", { path }),
+
+  portTest: () => invoke<PortTest>("rpc_port_test"),
+
+  renamePath: (id: number, path: string, name: string) =>
+    invoke<unknown>("rpc_rename_path", { id, path, name }),
+
+  setLocation: (ids: number[], location: string, moveData: boolean) =>
+    invoke<unknown>("rpc_set_location", { ids, location, moveData }),
 };

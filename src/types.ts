@@ -145,5 +145,39 @@ export interface SessionInfo {
   "rename-partial-files": boolean;
   "seedRatioLimit": number;
   "seedRatioLimited": boolean;
+  "port-forwarding-enabled": boolean;
   [key: string]: unknown;
+}
+
+/** One bucket of `session-stats` (current session or cumulative). */
+export interface StatsBucket {
+  downloadedBytes: number;
+  uploadedBytes: number;
+  filesAdded: number;
+  secondsActive: number;
+  sessionCount?: number;
+}
+
+export interface SessionStats {
+  activeTorrentCount: number;
+  pausedTorrentCount: number;
+  torrentCount: number;
+  downloadSpeed: number;
+  uploadSpeed: number;
+  "cumulative-stats": StatsBucket;
+  "current-stats": StatsBucket;
+}
+
+export interface FreeSpace {
+  path: string;
+  /** Bytes free. Negative means the daemon could not stat the path. */
+  "size-bytes": number;
+  /** Present on success (snake_case). */
+  total_size?: number;
+  /** Present only on the daemon's failure path, where it uses camelCase. */
+  totalSize?: number;
+}
+
+export interface PortTest {
+  "port-is-open": boolean;
 }
