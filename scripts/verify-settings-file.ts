@@ -26,7 +26,7 @@ const {
   SETTINGS_FILE_VERSION,
   SETTINGS_FILE_APP,
 } = await import("../src/settingsFile.ts");
-const { DEFAULT_STATUS_BAR_FIELDS, DEFAULT_HIDDEN_REFRESH, DEFAULT_VIEW_OPTIONS } =
+const { DEFAULT_STATUS_BAR_FIELDS, DEFAULT_HIDDEN_REFRESH, DEFAULT_VIEW_OPTIONS, DEFAULT_SMOOTH_SPEEDS, DEFAULT_TRAY_ALWAYS_VISIBLE } =
   await import("../src/settingsFile.ts");
 
 let passed = 0;
@@ -71,6 +71,8 @@ const settings = {
   minimizeToTray: false,
   viewOptions: { toolbar: false, filterPane: true, details: false, statusBar: true, bigToolbar: true },
   clipboardAutoAdd: true,
+  smoothSpeeds: true,
+  trayAlwaysVisible: false,
 };
 
 // (1) the store really does hold a password — the point is that the export
@@ -103,6 +105,8 @@ if (back.ok) {
   eq(s.minimizeToTray, false, "minimizeToTray round-trips");
   eq(s.viewOptions, settings.viewOptions, "viewOptions round-trips");
   eq(s.clipboardAutoAdd, true, "clipboardAutoAdd round-trips");
+  eq(s.smoothSpeeds, true, "smoothSpeeds round-trips");
+  eq(s.trayAlwaysVisible, false, "trayAlwaysVisible round-trips");
   eq(s.columns, settings.columns, "columns still round-trips");
   eq(s.notifyOnComplete, false, "notifyOnComplete still round-trips");
   eq(s.pathMap, settings.pathMap, "pathMap still round-trips");
@@ -119,7 +123,9 @@ if (back.ok) {
       "notifyOnComplete",
       "pathMap",
       "servers",
+      "smoothSpeeds",
       "statusBarFields",
+      "trayAlwaysVisible",
       "uiFontSize",
       "viewOptions",
     ],
@@ -148,6 +154,8 @@ if (old.ok) {
   eq(old.settings.minimizeToTray, true, "v1 missing minimizeToTray -> default true");
   eq(old.settings.viewOptions, DEFAULT_VIEW_OPTIONS, "v1 missing viewOptions -> defaults");
   eq(old.settings.clipboardAutoAdd, false, "v1 missing clipboardAutoAdd -> default false");
+  eq(old.settings.smoothSpeeds, DEFAULT_SMOOTH_SPEEDS, "v1 missing smoothSpeeds -> default false");
+  eq(old.settings.trayAlwaysVisible, DEFAULT_TRAY_ALWAYS_VISIBLE, "v1 missing trayAlwaysVisible -> default true");
   eq(old.settings.columns, ["name", "progress"], "v1 columns preserved");
   eq(old.settings.notifyOnComplete, true, "v1 notifyOnComplete preserved");
   check(
@@ -168,6 +176,8 @@ const dirty = parseSettingsFile(
     viewOptions: { toolbar: "maybe" },
     minimizeToTray: 3,
     clipboardAutoAdd: "true",
+    smoothSpeeds: "true",
+    trayAlwaysVisible: 3,
   }),
 );
 if (dirty.ok) {
@@ -177,6 +187,8 @@ if (dirty.ok) {
   eq(dirty.settings.minimizeToTray, true, "non-boolean minimizeToTray -> default true");
   eq(dirty.settings.viewOptions, DEFAULT_VIEW_OPTIONS, "garbage viewOptions -> defaults");
   eq(dirty.settings.clipboardAutoAdd, false, "non-boolean clipboardAutoAdd -> default false");
+  eq(dirty.settings.smoothSpeeds, false, "non-boolean smoothSpeeds -> default false");
+  eq(dirty.settings.trayAlwaysVisible, true, "non-boolean trayAlwaysVisible -> default true");
 }
 
 // (4) fail-closed: bad inputs must not be applied to the store.

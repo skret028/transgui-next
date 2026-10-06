@@ -38,6 +38,12 @@ interface Props {
   /** Client-side: watch the clipboard for torrent links (off by default). */
   clipboardAuto: boolean;
   onClipboardAutoChange: (on: boolean) => void;
+  /** Client-side: show a moving average of the list's transfer speeds. */
+  smoothSpeeds: boolean;
+  onSmoothSpeedsChange: (on: boolean) => void;
+  /** Client-side: keep the tray icon visible while the main window is shown. */
+  trayAlwaysVisible: boolean;
+  onTrayAlwaysVisibleChange: (on: boolean) => void;
 }
 
 interface Fields {
@@ -272,6 +278,10 @@ export function SettingsDialog({
   onImportSettings,
   clipboardAuto,
   onClipboardAutoChange,
+  smoothSpeeds,
+  onSmoothSpeedsChange,
+  trayAlwaysVisible,
+  onTrayAlwaysVisibleChange,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -928,6 +938,30 @@ export function SettingsDialog({
           </label>
           <p className="muted">
             {t("Watches the clipboard for magnet or .torrent links and opens the Add dialog pre-filled — nothing is added until you confirm.")}
+          </p>
+
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={smoothSpeeds}
+              onChange={(e) => onSmoothSpeedsChange(e.target.checked)}
+            />
+            {t("Smooth transfer speeds")}
+          </label>
+          <p className="muted">
+            {t("Show the recent average of the download and upload rate in the list, to smooth out spikes.")}
+          </p>
+
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={trayAlwaysVisible}
+              onChange={(e) => onTrayAlwaysVisibleChange(e.target.checked)}
+            />
+            {t("Tray icon always visible")}
+          </label>
+          <p className="muted">
+            {t("Hide the tray icon while the main window is visible; it is restored when the window is hidden. macOS may not honour this.")}
           </p>
 
           <div className="pathmap">

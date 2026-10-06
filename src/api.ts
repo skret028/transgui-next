@@ -34,6 +34,10 @@ export const rpc = {
   /** Tells the backend whether closing the window should hide it to the tray. */
   setCloseToTray: (hide: boolean) => invoke<void>("set_close_to_tray", { hide }),
 
+  /** Tells the backend whether the tray icon stays visible while the window is shown. */
+  setTrayAlwaysVisible: (always: boolean) =>
+    invoke<void>("set_tray_always_visible", { always }),
+
   session: () => invoke<SessionInfo>("rpc_session"),
 
   setSession: (patch: Record<string, unknown>) =>

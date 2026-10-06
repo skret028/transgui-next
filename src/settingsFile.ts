@@ -4,7 +4,8 @@
  * Only what this app owns: the connection form, saved servers, locale, visible
  * columns, the completion-notice preference, the path mapping and every other
  * local preference (font size, status-bar fields, hidden-window refresh,
- * close-to-tray, view options, clipboard watching). Passwords are deliberately
+ * close-to-tray, view options, clipboard watching, smoothed speeds, the
+ * always-visible tray icon). Passwords are deliberately
  * never written — an exported file is something you mail to yourself or commit
  * next to your dotfiles, and a connection password has no business travelling
  * with it.
@@ -50,6 +51,8 @@ export interface SafeSettings {
   minimizeToTray: boolean;
   viewOptions: ViewOptions;
   clipboardAutoAdd: boolean;
+  smoothSpeeds: boolean;
+  trayAlwaysVisible: boolean;
 }
 
 export interface SettingsFile extends SafeSettings {
@@ -79,6 +82,8 @@ export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
   statusBar: true,
   bigToolbar: false,
 };
+export const DEFAULT_SMOOTH_SPEEDS = false;
+export const DEFAULT_TRAY_ALWAYS_VISIBLE = true;
 
 const FONT_SIZES = ["small", "medium", "large"];
 
@@ -179,6 +184,8 @@ export function buildSettingsFile(
     minimizeToTray: !!settings.minimizeToTray,
     viewOptions: sanitizeViewOptions(settings.viewOptions),
     clipboardAutoAdd: !!settings.clipboardAutoAdd,
+    smoothSpeeds: !!settings.smoothSpeeds,
+    trayAlwaysVisible: settings.trayAlwaysVisible ?? DEFAULT_TRAY_ALWAYS_VISIBLE,
   };
 }
 
@@ -269,6 +276,8 @@ export function parseSettingsFile(text: string): ImportResult {
   settings.minimizeToTray = bool(objData.minimizeToTray, true);
   settings.viewOptions = sanitizeViewOptions(objData.viewOptions);
   settings.clipboardAutoAdd = bool(objData.clipboardAutoAdd, false);
+  settings.smoothSpeeds = bool(objData.smoothSpeeds, DEFAULT_SMOOTH_SPEEDS);
+  settings.trayAlwaysVisible = bool(objData.trayAlwaysVisible, DEFAULT_TRAY_ALWAYS_VISIBLE);
 
   // A file that carries a password was probably hand-edited; say so rather than
   // silently dropping it, because the user may expect it to be applied.

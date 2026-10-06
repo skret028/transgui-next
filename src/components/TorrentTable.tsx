@@ -23,6 +23,8 @@ interface Props {
   sortDir: SortDir;
   selection: Set<number>;
   columns: ColumnId[];
+  /** When set, the list shows these smoothed rates instead of the raw ones. */
+  speedAvg?: Map<number, { down: number; up: number }> | null;
   onSort: (key: SortKey) => void;
   onRowClick: (id: number, e: MouseEvent) => void;
   onToggleAll: () => void;
@@ -32,7 +34,12 @@ interface Props {
 const arrow = (active: boolean, dir: SortDir) => (active ? (dir === "asc" ? " ▲" : " ▼") : "");
 
 /** One row's cell for a given column id. */
-function cell(row: Torrent, id: ColumnId, t: TFn): ReactNode {
+function cell(
+  row: Torrent,
+  id: ColumnId,
+  t: TFn,
+  avg?: Map<number, { down: number; up: number }> | null,
+): ReactNode {
   switch (id) {
     case "name":
       return row.name;
@@ -53,9 +60,9 @@ function cell(row: Torrent, id: ColumnId, t: TFn): ReactNode {
         </div>
       );
     case "down":
-      return <span className="down">{formatSpeed(row.rateDownload)}</span>;
+      return <span className="down">{formatSpeed(avg?.get(row.id)?.down ?? row.rateDownload)}</span>;
     case "up":
-      return <span className="up">{formatSpeed(row.rateUpload)}</span>;
+      return <span className="up">{formatSpeed(avg?.get(row.id)?.up ?? row.rateUpload)}</span>;
     case "ratio":
       return formatRatio(row.uploadRatio);
     case "eta":
@@ -90,6 +97,7 @@ export function TorrentTable({
   sortDir,
   selection,
   columns,
+  speedAvg,
   onSort,
   onRowClick,
   onToggleAll,
@@ -163,7 +171,7 @@ export function TorrentTable({
                   className={cls(id)}
                   title={id === "name" ? row.name : id === "dir" ? row.downloadDir : undefined}
                 >
-                  {cell(row, id, t)}
+                  {cell(row, id, t, speedAvg)}
                 </td>
               ))}
             </tr>

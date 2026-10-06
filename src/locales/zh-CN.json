@@ -626,5 +626,9 @@
   "Could not reach GitHub to check for updates": "无法连接 GitHub 检查更新",
   "GitHub returned an unexpected status": "GitHub 返回了意外的状态",
   "That release has no version tag": "该 release 没有版本标签",
-  "Reverse lookup failed": "反向解析失败"
+  "Reverse lookup failed": "反向解析失败",
+  "Deselect all": "全不选",
+  "Smooth transfer speeds": "平滑传输速度",
+  "Show the recent average of the download and upload rate in the list, to smooth out spikes.": "在列表中显示最近几次采样的平均下载/上传速度，平滑掉跳动。",
+  "Hide the tray icon while the main window is visible; it is restored when the window is hidden. macOS may not honour this.": "主窗口可见时隐藏托盘图标，窗口隐藏后自动恢复。macOS 上可能不生效。"
 }

@@ -19,7 +19,9 @@ import {
   loadNotifyOnComplete,
   loadPathMap,
   loadServers,
+  loadSmoothSpeeds,
   loadStatusBarFields,
+  loadTrayAlwaysVisible,
   loadUiFontSize,
   loadViewOptions,
   saveColumns,
@@ -30,7 +32,9 @@ import {
   saveNotifyOnComplete,
   savePathMap,
   saveServers,
+  saveSmoothSpeeds,
   saveStatusBarFields,
+  saveTrayAlwaysVisible,
   saveUiFontSize,
   saveViewOptions,
   saveClipboardAutoAdd,
@@ -41,6 +45,7 @@ import {
 } from "./settings";
 import { revealPathFor, type PathMapping } from "./paths";
 import { buildSettingsFile, parseSettingsFile } from "./settingsFile";
+import { SPEED_WINDOW, averagedSpeeds, sampleSpeeds, type SpeedHistory } from "./speedAverage";
 import {
   ALL_SELECTION,
   filterTorrents,
@@ -125,6 +130,12 @@ function AppInner() {
   const [clipboardAuto, setClipboardAuto] = useState(false);
   /** Link found on the clipboard, handed to the Add dialog for confirmation. */
   const [clipboardLink, setClipboardLink] = useState("");
+  /** Opt-in: show a moving average of the list's transfer speeds. */
+  const [smoothSpeeds, setSmoothSpeeds] = useState(false);
+  /** Rolling per-torrent rate samples, folded in on every refresh. */
+  const [speedHistory, setSpeedHistory] = useState<SpeedHistory>({});
+  /** Tray icon stays visible even while the window is shown. */
+  const [trayAlwaysVisible, setTrayAlwaysVisible] = useState(true);
 
   const [detail, setDetail] = useState<TorrentDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -170,6 +181,12 @@ function AppInner() {
     [torrents, filterText, filterSel, sortKey, sortDir],
   );
 
+  // Smoothed rates for the list, or null to show the daemon's raw values.
+  const displaySpeeds = useMemo(
+    () => (smoothSpeeds ? averagedSpeeds(speedHistory) : null),
+    [smoothSpeeds, speedHistory],
+  );
+
   // Which local path "Show in folder" opens: the daemon's own path when it
   // shares this filesystem, otherwise the mapped one. null = not openable.
   const revealTarget = useMemo(
@@ -191,7 +208,17 @@ function AppInner() {
 
   const refresh = useCallback(async () => {
     try {
-      setTorrents(await rpc.torrents());
+      const list = await rpc.torrents();
+      setTorrents(list);
+      // Feed the smoothing history on every poll, so toggling the setting on
+      // shows a value immediately instead of building up from nothing.
+      setSpeedHistory((prev) =>
+        sampleSpeeds(
+          prev,
+          list.map((x) => ({ id: x.id, down: x.rateDownload, up: x.rateUpload })),
+          SPEED_WINDOW,
+        ),
+      );
       setLastUpdate(new Date());
       setError("");
     } catch (e) {
@@ -260,6 +287,8 @@ function AppInner() {
       const savedMinimizeToTray = await loadMinimizeToTray();
       const savedViewOptions = await loadViewOptions();
       const savedClipboardAuto = await loadClipboardAutoAdd();
+      const savedSmoothSpeeds = await loadSmoothSpeeds();
+      const savedTrayAlwaysVisible = await loadTrayAlwaysVisible();
       if (cancelled) return;
       setForm(saved);
       setServers(savedServers);
@@ -274,6 +303,9 @@ function AppInner() {
       void rpc.setCloseToTray(savedMinimizeToTray);
       setViewOptions(savedViewOptions);
       setClipboardAuto(savedClipboardAuto);
+      setSmoothSpeeds(savedSmoothSpeeds);
+      setTrayAlwaysVisible(savedTrayAlwaysVisible);
+      void rpc.setTrayAlwaysVisible(savedTrayAlwaysVisible);
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -351,6 +383,29 @@ function AppInner() {
     const allSelected = visible.length > 0 && visible.every((x) => selection.has(x.id));
     setSelection(allSelected ? new Set() : new Set(visible.map((x) => x.id)));
   };
+
+  const selectAll = useCallback(() => {
+    setSelection(new Set(visible.map((x) => x.id)));
+  }, [visible]);
+
+  const selectNone = useCallback(() => setSelection(new Set()), []);
+
+  // Cmd/Ctrl+A selects every visible torrent, mirroring the header checkbox.
+  // It is skipped while typing in a field so the browser's own select-all still
+  // works inside the filter box, dialog inputs, etc.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      if (!connected || visible.length === 0) return;
+      e.preventDefault();
+      selectAll();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [connected, visible, selectAll]);
 
   const openDetails = useCallback(
     (id: number) => {
@@ -590,6 +645,17 @@ function AppInner() {
     void saveClipboardAutoAdd(on);
   }, []);
 
+  const changeSmoothSpeeds = useCallback((on: boolean) => {
+    setSmoothSpeeds(on);
+    void saveSmoothSpeeds(on);
+  }, []);
+
+  const changeTrayAlwaysVisible = useCallback((on: boolean) => {
+    setTrayAlwaysVisible(on);
+    void rpc.setTrayAlwaysVisible(on);
+    void saveTrayAlwaysVisible(on);
+  }, []);
+
   // Opt-in clipboard watcher. Every couple of seconds, only while enabled and
   // connected, look for a torrent link the user has newly copied. A new link
   // opens the Add dialog pre-filled for review — it is never added silently.
@@ -658,6 +724,8 @@ function AppInner() {
       minimizeToTray,
       viewOptions,
       clipboardAutoAdd: clipboardAuto,
+      smoothSpeeds,
+      trayAlwaysVisible,
     });
     const target = await save({
       defaultPath: "transgui-next-settings.json",
@@ -679,6 +747,8 @@ function AppInner() {
     minimizeToTray,
     viewOptions,
     clipboardAuto,
+    smoothSpeeds,
+    trayAlwaysVisible,
     t,
   ]);
 
@@ -745,6 +815,8 @@ function AppInner() {
     if (s.minimizeToTray !== undefined) changeMinimizeToTray(s.minimizeToTray);
     if (s.viewOptions !== undefined) changeViewOptions(s.viewOptions);
     if (s.clipboardAutoAdd !== undefined) changeClipboardAuto(s.clipboardAutoAdd);
+    if (s.smoothSpeeds !== undefined) changeSmoothSpeeds(s.smoothSpeeds);
+    if (s.trayAlwaysVisible !== undefined) changeTrayAlwaysVisible(s.trayAlwaysVisible);
 
     const base = t("Imported");
     return parsed.warnings.length
@@ -760,6 +832,8 @@ function AppInner() {
     changeMinimizeToTray,
     changeViewOptions,
     changeClipboardAuto,
+    changeSmoothSpeeds,
+    changeTrayAlwaysVisible,
     t,
   ]);
 
@@ -963,6 +1037,8 @@ function AppInner() {
           speedUp={Number(session?.["speed-limit-up"] ?? 0)}
           speedUpEnabled={!!session?.["speed-limit-up-enabled"]}
           onAction={action}
+          onSelectAll={selectAll}
+          onSelectNone={selectNone}
           onGlobalAction={globalAction}
           onOpenAdd={() => {
             setClipboardLink("");
@@ -997,6 +1073,7 @@ function AppInner() {
             sortDir={sortDir}
             selection={selection}
             columns={columns}
+            speedAvg={displaySpeeds}
             onSort={onSort}
             onRowClick={onRowClick}
             onToggleAll={toggleAll}
@@ -1072,6 +1149,10 @@ function AppInner() {
           onImportSettings={importSettings}
           clipboardAuto={clipboardAuto}
           onClipboardAutoChange={changeClipboardAuto}
+          smoothSpeeds={smoothSpeeds}
+          onSmoothSpeedsChange={changeSmoothSpeeds}
+          trayAlwaysVisible={trayAlwaysVisible}
+          onTrayAlwaysVisibleChange={changeTrayAlwaysVisible}
         />
       )}
 

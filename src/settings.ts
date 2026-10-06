@@ -294,3 +294,47 @@ export async function saveClipboardAutoAdd(on: boolean): Promise<void> {
   await store.set(CLIPBOARD_AUTO_KEY, on);
   await store.save();
 }
+
+const SMOOTH_SPEEDS_KEY = "smoothSpeeds";
+
+/**
+ * Show a moving average of each torrent's transfer rate in the list, to smooth
+ * out the poll-to-poll jumps. Off by default: the raw daemon numbers are more
+ * immediate, and the average lags a genuine change by a few samples.
+ */
+export async function loadSmoothSpeeds(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(SMOOTH_SPEEDS_KEY)) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export async function saveSmoothSpeeds(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(SMOOTH_SPEEDS_KEY, on);
+  await store.save();
+}
+
+const TRAY_ALWAYS_KEY = "trayAlwaysVisible";
+
+/**
+ * Keep the tray icon visible even while the main window is shown. On by default
+ * (the previous always-visible behavior); turning it off hides the icon while
+ * the window is up and restores it once the window is hidden.
+ */
+export async function loadTrayAlwaysVisible(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(TRAY_ALWAYS_KEY)) ?? true;
+  } catch {
+    return true;
+  }
+}
+
+export async function saveTrayAlwaysVisible(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(TRAY_ALWAYS_KEY, on);
+  await store.save();
+}

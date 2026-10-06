@@ -26,6 +26,45 @@ fn set_close_to_tray(state: tauri::State<'_, CloseToTray>, hide: bool) {
     state.0.store(hide, Ordering::SeqCst);
 }
 
+/// Whether the tray icon stays visible even while the main window is shown.
+///
+/// Defaults to on (the icon is always there, as before). Pushed from the UI so
+/// the Rust side owns every show/hide transition of the window and can keep the
+/// icon in sync without the JS tray capability.
+pub struct TrayAlwaysVisible(pub AtomicBool);
+
+impl Default for TrayAlwaysVisible {
+    fn default() -> Self {
+        Self(AtomicBool::new(true))
+    }
+}
+
+/// Match the tray icon's visibility to the setting and the window's state.
+///
+/// With the setting on the icon is always shown. With it off the icon is hidden
+/// while the window is visible and restored once the window is hidden, so the
+/// user can always bring the window back from the tray.
+fn apply_tray_visibility(app: &AppHandle) {
+    let always = app
+        .try_state::<TrayAlwaysVisible>()
+        .map(|f| f.0.load(Ordering::SeqCst))
+        .unwrap_or(true);
+    let window_visible = app
+        .get_webview_window("main")
+        .and_then(|w| w.is_visible().ok())
+        .unwrap_or(true);
+    if let Some(tray) = app.tray_by_id("main") {
+        // A failure here is not fatal: the icon simply keeps its current state.
+        let _ = tray.set_visible(always || !window_visible);
+    }
+}
+
+#[tauri::command]
+fn set_tray_always_visible(app: AppHandle, state: tauri::State<'_, TrayAlwaysVisible>, always: bool) {
+    state.0.store(always, Ordering::SeqCst);
+    apply_tray_visibility(&app);
+}
+
 /// Paths and magnet links the OS asked us to open.
 ///
 /// A file-open request can arrive before the webview has registered its
@@ -123,6 +162,7 @@ fn show_main_window(app: &AppHandle) {
         let _ = win.show();
         let _ = win.set_focus();
     }
+    apply_tray_visibility(app);
 }
 
 fn toggle_main_window(app: &AppHandle) {
@@ -134,6 +174,7 @@ fn toggle_main_window(app: &AppHandle) {
             let _ = win.set_focus();
         }
     }
+    apply_tray_visibility(app);
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
@@ -153,6 +194,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
                 }
+                apply_tray_visibility(app);
             }
             "quit" => {
                 if let Some(flag) = app.try_state::<QuitFlag>() {
@@ -215,6 +257,7 @@ pub fn run() {
         .manage(AppState::new())
         .manage(QuitFlag(AtomicBool::new(false)))
         .manage(CloseToTray(AtomicBool::new(true)))
+        .manage(TrayAlwaysVisible::default())
         .manage(PendingOpens::default())
         .invoke_handler(tauri::generate_handler![
             rpc::rpc_connect,
@@ -235,6 +278,7 @@ pub fn run() {
             rpc::rpc_set_location,
             take_pending_opens,
             set_close_to_tray,
+            set_tray_always_visible,
             rpc_reveal_path,
             write_text_file,
             read_text_file,
@@ -249,6 +293,7 @@ pub fn run() {
             app.manage(geoip::GeoIp::default());
             let handle = app.handle().clone();
             build_tray(&handle)?;
+            apply_tray_visibility(&handle);
             if let Err(e) = register_global_shortcut(&handle) {
                 eprintln!("global shortcut registration failed: {e}");
             }
@@ -282,6 +327,7 @@ pub fn run() {
                 if !quitting {
                     // Hide to tray instead of quitting.
                     let _ = window.hide();
+                    apply_tray_visibility(handle);
                     api.prevent_close();
                 }
             }

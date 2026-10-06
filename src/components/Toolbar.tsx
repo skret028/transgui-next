@@ -14,6 +14,8 @@ interface Props {
   speedUp: number;
   speedUpEnabled: boolean;
   onAction: (action: string) => void;
+  onSelectAll: () => void;
+  onSelectNone: () => void;
   onGlobalAction: (action: string) => void;
   onOpenAdd: () => void;
   onOpenSettings: () => void;
@@ -77,6 +79,8 @@ export function Toolbar({
   speedUp,
   speedUpEnabled,
   onAction,
+  onSelectAll,
+  onSelectNone,
   onGlobalAction,
   onOpenAdd,
   onOpenSettings,
@@ -110,19 +114,25 @@ export function Toolbar({
       </button>
 
       {/* Low-frequency per-torrent actions live in one control so the bar stays
-          short. The value is reset to "" so the same choice can be re-picked. */}
+          short. The value is reset to "" so the same choice can be re-picked.
+          Select-all/none are always available, so the menu is gated on the
+          connection rather than on a non-empty selection. */}
       <select
         className="action-select"
         value=""
-        disabled={busy}
+        disabled={!connected}
         title={t("More actions")}
         onChange={(e) => {
           const v = e.target.value;
           e.target.value = "";
-          if (v) onAction(v);
+          if (v === "select_all") onSelectAll();
+          else if (v === "select_none") onSelectNone();
+          else if (v) onAction(v);
         }}
       >
         <option value="">{t("More actions")}…</option>
+        <option value="select_all">{t("Select all")}</option>
+        <option value="select_none">{t("Deselect all")}</option>
         <option value="start_now">{t("Force start")}</option>
         <option value="queue_top">{t("Move top")}</option>
         <option value="queue_up">{t("Move up")}</option>
