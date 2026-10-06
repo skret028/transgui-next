@@ -652,6 +652,12 @@ function AppInner() {
       columns,
       notifyOnComplete,
       pathMap,
+      uiFontSize,
+      statusBarFields: statusFields,
+      hiddenRefresh,
+      minimizeToTray,
+      viewOptions,
+      clipboardAutoAdd: clipboardAuto,
     });
     const target = await save({
       defaultPath: "transgui-next-settings.json",
@@ -660,7 +666,21 @@ function AppInner() {
     if (!target) return "";
     await rpc.writeTextFile(target, JSON.stringify(payload, null, 2) + "\n");
     return `${t("Exported to")} ${target}`;
-  }, [form, servers, locale, columns, notifyOnComplete, pathMap, t]);
+  }, [
+    form,
+    servers,
+    locale,
+    columns,
+    notifyOnComplete,
+    pathMap,
+    uiFontSize,
+    statusFields,
+    hiddenRefresh,
+    minimizeToTray,
+    viewOptions,
+    clipboardAuto,
+    t,
+  ]);
 
   const importSettings = useCallback(async (): Promise<string> => {
     const picked = await open({
@@ -718,12 +738,30 @@ function AppInner() {
       setPathMap(s.pathMap);
       void savePathMap(s.pathMap);
     }
+    // Always present (defaulted when the file predates them), so apply as-is.
+    if (s.uiFontSize !== undefined) changeUiFontSize(s.uiFontSize);
+    if (s.statusBarFields !== undefined) changeStatusFields(s.statusBarFields);
+    if (s.hiddenRefresh !== undefined) changeHiddenRefresh(s.hiddenRefresh);
+    if (s.minimizeToTray !== undefined) changeMinimizeToTray(s.minimizeToTray);
+    if (s.viewOptions !== undefined) changeViewOptions(s.viewOptions);
+    if (s.clipboardAutoAdd !== undefined) changeClipboardAuto(s.clipboardAutoAdd);
 
     const base = t("Imported");
     return parsed.warnings.length
       ? `${base} · ${parsed.warnings.map((w) => t(w)).join("; ")}`
       : base;
-  }, [form, servers, connect, t]);
+  }, [
+    form,
+    servers,
+    connect,
+    changeUiFontSize,
+    changeStatusFields,
+    changeHiddenRefresh,
+    changeMinimizeToTray,
+    changeViewOptions,
+    changeClipboardAuto,
+    t,
+  ]);
 
   // Add a .torrent (or magnet) the OS asked us to open.
   const addFromOs = useCallback(
