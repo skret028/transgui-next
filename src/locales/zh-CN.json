@@ -613,5 +613,18 @@
   "Hints": "提示",
   "Double-click hint": "双击提示",
   "Double-click a torrent to open details": "双击种子查看详情",
-  "Reduce refresh rate when the window is hidden": "窗口隐藏时降低刷新频率"
+  "Reduce refresh rate when the window is hidden": "窗口隐藏时降低刷新频率",
+  "Host name": "主机名",
+  "Resolve host names": "解析主机名",
+  "Add torrent links from the clipboard automatically": "自动添加剪贴板里的 Torrent 链接",
+  "Watches the clipboard for magnet or .torrent links and opens the Add dialog pre-filled — nothing is added until you confirm.": "监视剪贴板中的 magnet 或 .torrent 链接，并打开预填好的添加对话框——在你确认前不会添加任何内容。",
+  "Updates": "更新",
+  "Checking…": "检查中…",
+  "You are up to date": "已是最新版本",
+  "A newer version is available: {version}": "有新版本可用：{version}",
+  "Compare this build with the latest GitHub release.": "将当前版本与 GitHub 上最新的 release 进行比较。",
+  "Could not reach GitHub to check for updates": "无法连接 GitHub 检查更新",
+  "GitHub returned an unexpected status": "GitHub 返回了意外的状态",
+  "That release has no version tag": "该 release 没有版本标签",
+  "Reverse lookup failed": "反向解析失败"
 }

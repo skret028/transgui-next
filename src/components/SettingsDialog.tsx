@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
-import { rpc, type GeoIpStatus } from "../api";
+import { rpc, type GeoIpStatus, type UpdateInfo } from "../api";
 import type { SessionInfo } from "../types";
 import type { PathMapping } from "../paths";
 import type {
@@ -35,6 +35,9 @@ interface Props {
   /** Resolve to a status message, or throw/"" to stay quiet (e.g. cancelled). */
   onExportSettings: () => Promise<string>;
   onImportSettings: () => Promise<string>;
+  /** Client-side: watch the clipboard for torrent links (off by default). */
+  clipboardAuto: boolean;
+  onClipboardAutoChange: (on: boolean) => void;
 }
 
 interface Fields {
@@ -267,6 +270,8 @@ export function SettingsDialog({
   onPathMapChange,
   onExportSettings,
   onImportSettings,
+  clipboardAuto,
+  onClipboardAutoChange,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -280,6 +285,9 @@ export function SettingsDialog({
   const [geo, setGeo] = useState<GeoIpStatus | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoMsg, setGeoMsg] = useState("");
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [updateErr, setUpdateErr] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -370,6 +378,21 @@ export function SettingsDialog({
       setGeoMsg(String(e));
     } finally {
       setGeoBusy(false);
+    }
+  };
+
+  // Compare this build with the latest GitHub release. The Rust side reads only
+  // the public release tag; failures come back as translatable strings.
+  const checkUpdates = async () => {
+    setUpdateBusy(true);
+    setUpdateErr("");
+    setUpdate(null);
+    try {
+      setUpdate(await rpc.checkForUpdates());
+    } catch (e) {
+      setUpdateErr(String(e));
+    } finally {
+      setUpdateBusy(false);
     }
   };
 
@@ -895,6 +918,18 @@ export function SettingsDialog({
             {t("Close to tray")}
           </label>
 
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={clipboardAuto}
+              onChange={(e) => onClipboardAutoChange(e.target.checked)}
+            />
+            {t("Add torrent links from the clipboard automatically")}
+          </label>
+          <p className="muted">
+            {t("Watches the clipboard for magnet or .torrent links and opens the Add dialog pre-filled — nothing is added until you confirm.")}
+          </p>
+
           <div className="pathmap">
             <div className="pathmap-head">
               <span>{t("Path mapping")}</span>
@@ -997,6 +1032,33 @@ export function SettingsDialog({
             </div>
             {geoMsg && <p className="muted">{geoMsg}</p>}
             <p className="muted">{t("Data: DB-IP Lite (CC BY 4.0)")}</p>
+          </div>
+
+          <div className="settings-file">
+            <div className="pathmap-head">
+              <span>{t("Updates")}</span>
+            </div>
+            <p className="muted">{t("Compare this build with the latest GitHub release.")}</p>
+            <div className="inline-actions">
+              <button className="btn" disabled={updateBusy} onClick={() => void checkUpdates()}>
+                {updateBusy ? t("Checking…") : t("Check for updates")}
+              </button>
+              {update && !update.newer && (
+                <span className="up">
+                  {t("You are up to date")} · {update.current}
+                </span>
+              )}
+              {update && update.newer && (
+                <span className="up">
+                  {t("A newer version is available: {version}", { version: update.latest })}
+                  {" · "}
+                  <span className="mono ellipsis" title={update.url}>
+                    {update.url}
+                  </span>
+                </span>
+              )}
+              {updateErr && <span className="down">{t(updateErr)}</span>}
+            </div>
           </div>
         </div>
       )}

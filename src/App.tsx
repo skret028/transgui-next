@@ -10,6 +10,7 @@ import {
   DEFAULT_HIDDEN_REFRESH,
   DEFAULT_STATUS_FIELDS,
   DEFAULT_VIEW_OPTIONS,
+  loadClipboardAutoAdd,
   loadColumns,
   loadConnForm,
   loadHiddenRefresh,
@@ -32,6 +33,7 @@ import {
   saveStatusBarFields,
   saveUiFontSize,
   saveViewOptions,
+  saveClipboardAutoAdd,
   type HiddenRefresh,
   type StatusBarFields,
   type UiFontSize,
@@ -84,8 +86,12 @@ import { DEFAULT_COLUMNS, normalizeColumns, type ColumnId } from "./columns";
 import { notify } from "./notify";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { extractTorrentLink } from "./torrentLink";
 
 const REFRESH_MS = 2000;
+/** How often the opt-in clipboard watcher looks for a new torrent link. */
+const CLIPBOARD_MS = 2000;
 
 function AppInner() {
   const t = useT();
@@ -115,6 +121,10 @@ function AppInner() {
   const [hiddenRefresh, setHiddenRefresh] = useState<HiddenRefresh>(DEFAULT_HIDDEN_REFRESH);
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [viewOptions, setViewOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
+  /** Opt-in: pre-fill the Add dialog when a torrent link is copied. */
+  const [clipboardAuto, setClipboardAuto] = useState(false);
+  /** Link found on the clipboard, handed to the Add dialog for confirmation. */
+  const [clipboardLink, setClipboardLink] = useState("");
 
   const [detail, setDetail] = useState<TorrentDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -144,6 +154,11 @@ function AppInner() {
   const seededRef = useRef(false);
   /** Live value for the window close handler (which is registered once). */
   const minimizeToTrayRef = useRef(true);
+  /** Clipboard links already offered, so the same one is not re-prompted. */
+  const clipboardSeenRef = useRef<Set<string>>(new Set());
+  /** Mirrors `showAdd` for the clipboard watcher, which must not consume a
+   * link while the Add dialog is already open. */
+  const addOpenRef = useRef(false);
 
   const visible = useMemo(
     () =>
@@ -244,6 +259,7 @@ function AppInner() {
       const savedHiddenRefresh = await loadHiddenRefresh();
       const savedMinimizeToTray = await loadMinimizeToTray();
       const savedViewOptions = await loadViewOptions();
+      const savedClipboardAuto = await loadClipboardAutoAdd();
       if (cancelled) return;
       setForm(saved);
       setServers(savedServers);
@@ -257,6 +273,7 @@ function AppInner() {
       minimizeToTrayRef.current = savedMinimizeToTray;
       void rpc.setCloseToTray(savedMinimizeToTray);
       setViewOptions(savedViewOptions);
+      setClipboardAuto(savedClipboardAuto);
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -399,6 +416,7 @@ function AppInner() {
       try {
         await rpc.add(options);
         setShowAdd(false);
+        setClipboardLink("");
         await refresh();
       } catch (e) {
         setError(String(e));
@@ -566,6 +584,41 @@ function AppInner() {
     setViewOptions(value);
     void saveViewOptions(value);
   }, []);
+
+  const changeClipboardAuto = useCallback((on: boolean) => {
+    setClipboardAuto(on);
+    void saveClipboardAutoAdd(on);
+  }, []);
+
+  // Opt-in clipboard watcher. Every couple of seconds, only while enabled and
+  // connected, look for a torrent link the user has newly copied. A new link
+  // opens the Add dialog pre-filled for review — it is never added silently.
+  useEffect(() => {
+    addOpenRef.current = showAdd;
+  }, [showAdd]);
+
+  useEffect(() => {
+    if (!clipboardAuto || !connected) return;
+    const id = window.setInterval(() => {
+      void (async () => {
+        // Leave the link for later rather than hijacking the open dialog.
+        if (addOpenRef.current) return;
+        let text = "";
+        try {
+          text = await readText();
+        } catch {
+          // Permission denied or no clipboard: skip this tick.
+          return;
+        }
+        const link = extractTorrentLink(text);
+        if (!link || clipboardSeenRef.current.has(link)) return;
+        clipboardSeenRef.current.add(link);
+        setClipboardLink(link);
+        setShowAdd(true);
+      })();
+    }, CLIPBOARD_MS);
+    return () => window.clearInterval(id);
+  }, [clipboardAuto, connected]);
 
   // Close button: hide to the tray when enabled (the backend already does this),
   // otherwise force the window closed. destroy() is best-effort — it needs the
@@ -873,7 +926,10 @@ function AppInner() {
           speedUpEnabled={!!session?.["speed-limit-up-enabled"]}
           onAction={action}
           onGlobalAction={globalAction}
-          onOpenAdd={() => setShowAdd(true)}
+          onOpenAdd={() => {
+            setClipboardLink("");
+            setShowAdd(true);
+          }}
           onOpenSettings={() => setShowSettings(true)}
           onOpenLabels={() => setShowLabels(true)}
           onOpenProps={() => setShowProps(true)}
@@ -947,7 +1003,14 @@ function AppInner() {
       )}
 
       {showAdd && (
-        <AddTorrentDialog onClose={() => setShowAdd(false)} onSubmit={submitAdd} />
+        <AddTorrentDialog
+          initialSource={clipboardLink}
+          onClose={() => {
+            setShowAdd(false);
+            setClipboardLink("");
+          }}
+          onSubmit={submitAdd}
+        />
       )}
 
       {showSettings && (
@@ -969,6 +1032,8 @@ function AppInner() {
           onPathMapChange={changePathMap}
           onExportSettings={exportSettings}
           onImportSettings={importSettings}
+          clipboardAuto={clipboardAuto}
+          onClipboardAutoChange={changeClipboardAuto}
         />
       )}
 

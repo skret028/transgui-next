@@ -82,6 +82,14 @@ export const rpc = {
   geoipDownload: () => invoke<GeoIpStatus>("geoip_download"),
   geoipClear: () => invoke<GeoIpStatus>("geoip_clear"),
   geoipLookup: (ips: string[]) => invoke<Record<string, string>>("geoip_lookup", { ips }),
+
+  /** Reverse DNS (PTR) for peer addresses. Explicit trigger; blocking on the
+   * Rust side, so the call can take a moment. */
+  resolveHostNames: (ips: string[]) =>
+    invoke<Record<string, string>>("resolve_host_names", { ips }),
+
+  /** Compare this build against the latest public GitHub release. */
+  checkForUpdates: () => invoke<UpdateInfo>("check_for_updates"),
 };
 
 export interface GeoIpStatus {
@@ -90,4 +98,15 @@ export interface GeoIpStatus {
   bytes: number;
   /** Seconds since the epoch, or null when not installed. */
   updatedAt: number | null;
+}
+
+export interface UpdateInfo {
+  /** This build's version. */
+  current: string;
+  /** The latest release's tag. */
+  latest: string;
+  /** Whether a newer version is available. */
+  newer: boolean;
+  /** Release page to open for details. */
+  url: string;
 }

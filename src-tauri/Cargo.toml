@@ -24,6 +24,11 @@ tauri-plugin-store = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
+# Reads the system clipboard for the opt-in "add torrent links from the
+# clipboard" watcher (disabled by default).
+tauri-plugin-clipboard-manager = "2"
+# getnameinfo/PTR reverse lookups for peer addresses (explicitly triggered).
+dns-lookup = "4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

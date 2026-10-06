@@ -9,11 +9,18 @@ interface Props {
   onSubmit: (options: AddTorrentOptions) => Promise<void>;
   /** When true, the dialog is shown right after connecting. */
   defaultPaused?: boolean;
+  /** Pre-fill the magnet/URL field (e.g. a link found on the clipboard). */
+  initialSource?: string;
 }
 
-export function AddTorrentDialog({ onClose, onSubmit, defaultPaused = false }: Props) {
+export function AddTorrentDialog({
+  onClose,
+  onSubmit,
+  defaultPaused = false,
+  initialSource = "",
+}: Props) {
   const t = useT();
-  const [source, setSource] = useState("");
+  const [source, setSource] = useState(initialSource);
   const [file, setFile] = useState("");
   const [dir, setDir] = useState("");
   const [labels, setLabels] = useState("");

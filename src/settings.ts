@@ -272,3 +272,25 @@ export async function saveViewOptions(value: ViewOptions): Promise<void> {
   await store.set(VIEW_OPTIONS_KEY, value);
   await store.save();
 }
+
+const CLIPBOARD_AUTO_KEY = "clipboardAutoAdd";
+
+/**
+ * Watch the system clipboard for magnet / .torrent links and pre-fill the Add
+ * dialog. Off by default: reading the clipboard is a privacy-relevant action,
+ * so it only happens when the user turns it on.
+ */
+export async function loadClipboardAutoAdd(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(CLIPBOARD_AUTO_KEY)) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export async function saveClipboardAutoAdd(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(CLIPBOARD_AUTO_KEY, on);
+  await store.save();
+}

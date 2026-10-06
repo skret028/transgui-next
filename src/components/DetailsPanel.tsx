@@ -77,6 +77,9 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
   const [trackerAdd, setTrackerAdd] = useState(false);
   const [trackerEdit, setTrackerEdit] = useState<{ id: number; url: string } | null>(null);
   const [moving, setMoving] = useState(false);
+  /** Reverse-DNS results, keyed by peer address. Filled only on request. */
+  const [hostnames, setHostnames] = useState<Record<string, string>>({});
+  const [resolving, setResolving] = useState(false);
 
   const doCopy = async (what: string, text: string) => {
     if (await copyText(text)) {
@@ -97,6 +100,21 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
   const fileStats = detail.fileStats ?? [];
   const peers = detail.peers ?? [];
   const trackers = detail.trackerStats ?? [];
+
+  // Explicit, user-triggered reverse DNS. Sends the peer addresses to the local
+  // resolver, so it never runs on its own; the IP is kept when there is no PTR.
+  const resolveHostNames = async () => {
+    const ips = [...new Set(peers.map((p) => p.address).filter(Boolean))].sort();
+    if (ips.length === 0) return;
+    setResolving(true);
+    try {
+      setHostnames(await rpc.resolveHostNames(ips));
+    } catch {
+      // Best-effort: on failure the addresses stay as plain IPs.
+    } finally {
+      setResolving(false);
+    }
+  };
 
   // Countries come from the optional database; without it the column stays
   // empty rather than guessing. Keyed on the address set so the details refresh
@@ -326,48 +344,63 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
         )}
 
         {tab === "peers" && (
-          <table className="sub-table">
-            <thead>
-              <tr>
-                <th>{t("Address")}</th>
-                <th>{t("Country")}</th>
-                <th>{t("Client")}</th>
-                <th>{t("Flags")}</th>
-                <th className="col-prog">{t("Progress")}</th>
-                <th className="num">{t("Download")}</th>
-                <th className="num">{t("Upload")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {peers.length === 0 && (
+          <>
+            <div className="tab-actions">
+              <button
+                className="btn"
+                onClick={() => void resolveHostNames()}
+                disabled={resolving || peers.length === 0}
+              >
+                {resolving ? t("Working…") : t("Resolve host names")}
+              </button>
+            </div>
+            <table className="sub-table">
+              <thead>
                 <tr>
-                  <td className="empty" colSpan={7}>
-                    {t("No connected peers")}
-                  </td>
+                  <th>{t("Address")}</th>
+                  <th>{t("Host name")}</th>
+                  <th>{t("Country")}</th>
+                  <th>{t("Client")}</th>
+                  <th>{t("Flags")}</th>
+                  <th className="col-prog">{t("Progress")}</th>
+                  <th className="num">{t("Download")}</th>
+                  <th className="num">{t("Upload")}</th>
                 </tr>
-              )}
-              {peers.map((p, i) => (
-                <tr key={i}>
-                  <td className="mono">{p.address}</td>
-                  <td className="mono">
-                    {countries[p.address]
-                      ? `${flagEmoji(countries[p.address])} ${countries[p.address]}`
-                      : "-"}
-                  </td>
-                  <td>{p.clientName || "-"}</td>
-                  <td className="mono">{p.flagStr}</td>
-                  <td className="col-prog">
-                    <div className="prog small">
-                      <div className="prog-fill" style={{ width: `${(p.progress || 0) * 100}%` }} />
-                      <span className="prog-text">{formatPercent(p.progress)}</span>
-                    </div>
-                  </td>
-                  <td className="num down">{formatSpeed(p.rateToClient)}</td>
-                  <td className="num up">{formatSpeed(p.rateToPeer)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {peers.length === 0 && (
+                  <tr>
+                    <td className="empty" colSpan={8}>
+                      {t("No connected peers")}
+                    </td>
+                  </tr>
+                )}
+                {peers.map((p, i) => (
+                  <tr key={i}>
+                    <td className="mono">{p.address}</td>
+                    <td className="mono ellipsis" title={hostnames[p.address] ?? ""}>
+                      {hostnames[p.address] ?? "-"}
+                    </td>
+                    <td className="mono">
+                      {countries[p.address]
+                        ? `${flagEmoji(countries[p.address])} ${countries[p.address]}`
+                        : "-"}
+                    </td>
+                    <td>{p.clientName || "-"}</td>
+                    <td className="mono">{p.flagStr}</td>
+                    <td className="col-prog">
+                      <div className="prog small">
+                        <div className="prog-fill" style={{ width: `${(p.progress || 0) * 100}%` }} />
+                        <span className="prog-text">{formatPercent(p.progress)}</span>
+                      </div>
+                    </td>
+                    <td className="num down">{formatSpeed(p.rateToClient)}</td>
+                    <td className="num up">{formatSpeed(p.rateToPeer)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
         )}
 
         {tab === "trackers" && (
