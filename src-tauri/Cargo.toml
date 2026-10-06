@@ -27,6 +27,10 @@ tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Needed so a client identity (mutual TLS) can be built: rustls requires a
+# process-wide crypto provider, and ClientBuilder::build() fails with a bare
+# "builder error" without one.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 tokio = { version = "1", features = ["sync"] }
 base64 = "0.22"
 

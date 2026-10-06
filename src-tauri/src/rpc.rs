@@ -217,7 +217,7 @@ pub async fn rpc_connect(state: State<'_, AppState>, config: ConnConfig) -> Resu
     }
     let client = builder
         .build()
-        .map_err(|e| format!("构建 HTTP 客户端失败：{e}"))?;
+        .map_err(|e| format!("构建 HTTP 客户端失败：{e:?}"))?;
 
     let username = config.username.clone().filter(|s| !s.is_empty());
     let password = config.password.clone();

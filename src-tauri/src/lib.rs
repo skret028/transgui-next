@@ -180,6 +180,9 @@ fn register_global_shortcut(app: &AppHandle) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Install the rustls crypto provider before anything builds a TLS client;
+    // mutual TLS needs it and fails otherwise.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
