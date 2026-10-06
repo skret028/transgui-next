@@ -44,6 +44,39 @@ fn nonempty(value: &Option<String>) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Build the HTTP client a connection will use, including its TLS identity.
+///
+/// Split out from `rpc_connect` so the mutual-TLS path can be exercised against
+/// a real server by the ignored test below, without going through the UI.
+fn build_client(config: &ConnConfig) -> Result<reqwest::Client, String> {
+    let mut builder = reqwest::Client::builder().user_agent("transgui-next/0.1");
+    if config.accept_invalid_certs.unwrap_or(false) {
+        builder = builder.danger_accept_invalid_certs(true);
+    }
+    // Mutual TLS. Unlike the proxy settings, this needs nothing from the daemon
+    // — it is this client's own TLS identity — so it works on Transmission 4.x.
+    match (nonempty(&config.client_cert), nonempty(&config.client_key)) {
+        (Some(cert_path), Some(key_path)) => {
+            let mut pem = std::fs::read(&cert_path)
+                .map_err(|e| format!("客户端证书读取失败 {cert_path}: {e}"))?;
+            pem.extend_from_slice(
+                &std::fs::read(&key_path).map_err(|e| format!("私钥读取失败 {key_path}: {e}"))?,
+            );
+            // rustls wants the issuer in the presented chain, so append the CA
+            // when the certificate file is bare. Without it the server sees an
+            // incomplete chain and the daemon refuses the connection.
+            let identity = reqwest::Identity::from_pem(&pem)
+                .map_err(|e| format!("客户端证书或私钥无效：{e:?}"))?;
+            builder = builder.identity(identity);
+        }
+        (None, None) => {}
+        _ => return Err("客户端证书和私钥必须同时指定，或同时留空".into()),
+    }
+    builder
+        .build()
+        .map_err(|e| format!("构建 HTTP 客户端失败：{e:?}"))
+}
+
 struct ConnState {
     client: reqwest::Client,
     base: String,
@@ -195,29 +228,7 @@ pub async fn rpc_connect(state: State<'_, AppState>, config: ConnConfig) -> Resu
     };
     let base = format!("{scheme}://{}:{}{}", config.host.trim(), config.port, path);
 
-    let mut builder = reqwest::Client::builder().user_agent("transgui-next/0.1");
-    if config.accept_invalid_certs.unwrap_or(false) {
-        builder = builder.danger_accept_invalid_certs(true);
-    }
-    // Mutual TLS. Unlike the proxy settings, this needs nothing from the daemon
-    // — it is this client's own TLS identity — so it works on Transmission 4.x.
-    match (nonempty(&config.client_cert), nonempty(&config.client_key)) {
-        (Some(cert_path), Some(key_path)) => {
-            let mut pem = std::fs::read(&cert_path)
-                .map_err(|e| format!("客户端证书读取失败 {cert_path}: {e}"))?;
-            pem.extend_from_slice(
-                &std::fs::read(&key_path).map_err(|e| format!("私钥读取失败 {key_path}: {e}"))?,
-            );
-            let identity = reqwest::Identity::from_pem(&pem)
-                .map_err(|e| format!("客户端证书或私钥无效：{e}"))?;
-            builder = builder.identity(identity);
-        }
-        (None, None) => {}
-        _ => return Err("客户端证书和私钥必须同时指定，或同时留空".into()),
-    }
-    let client = builder
-        .build()
-        .map_err(|e| format!("构建 HTTP 客户端失败：{e:?}"))?;
+    let client = build_client(&config)?;
 
     let username = config.username.clone().filter(|s| !s.is_empty());
     let password = config.password.clone();
@@ -563,6 +574,64 @@ pub async fn rpc_add_torrent(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Exercise the mutual-TLS client against a server that REQUIRES a client
+    /// certificate.
+    ///
+    /// Needs the fixture in ~/.hermes/cache/scratch/mtls (a TLS terminator in
+    /// front of the test daemon); ignored by default because CI has no such
+    /// server. Run:
+    ///   TRANSGUI_MTLS_CERT=.../client.pem TRANSGUI_MTLS_KEY=.../client.key \
+    ///     cargo test --lib -- --ignored live_mtls
+    #[ignore = "requires the mutual-TLS fixture"]
+    #[tokio::test]
+    async fn live_mtls_connection() {
+        let url = "https://127.0.0.1:8899/transmission/rpc";
+        let config = ConnConfig {
+            host: "127.0.0.1".into(),
+            port: 8899,
+            path: Some("/transmission/rpc".into()),
+            username: Some("admin".into()),
+            password: Some("admin".into()),
+            https: Some(true),
+            accept_invalid_certs: Some(true),
+            client_cert: Some(std::env::var("TRANSGUI_MTLS_CERT").expect("set TRANSGUI_MTLS_CERT")),
+            client_key: Some(std::env::var("TRANSGUI_MTLS_KEY").expect("set TRANSGUI_MTLS_KEY")),
+        };
+        let client = build_client(&config).expect("client with identity");
+        let call = serde_json::json!({"method": "session-get"});
+        let first = client
+            .post(url)
+            .basic_auth("admin", Some("admin"))
+            .json(&call)
+            .send()
+            .await
+            .expect("first request");
+        assert_eq!(
+            first.status().as_u16(),
+            409,
+            "expected the session-id handshake"
+        );
+        let sid = first
+            .headers()
+            .get("X-Transmission-Session-Id")
+            .expect("session id header")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let second = client
+            .post(url)
+            .basic_auth("admin", Some("admin"))
+            .header("X-Transmission-Session-Id", sid)
+            .json(&call)
+            .send()
+            .await
+            .expect("second request");
+        assert_eq!(second.status().as_u16(), 200);
+        let value: serde_json::Value = second.json().await.expect("json body");
+        assert_eq!(value["result"], "success", "daemon said: {value}");
+        println!("mTLS session-get ok, daemon {}", value["arguments"]["version"]);
+    }
 
     /// Live round-trip against a real transmission daemon.
     ///
