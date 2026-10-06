@@ -31,6 +31,9 @@ export const rpc = {
 
   disconnect: () => invoke<void>("rpc_disconnect"),
 
+  /** Tells the backend whether closing the window should hide it to the tray. */
+  setCloseToTray: (hide: boolean) => invoke<void>("set_close_to_tray", { hide }),
+
   session: () => invoke<SessionInfo>("rpc_session"),
 
   setSession: (patch: Record<string, unknown>) =>

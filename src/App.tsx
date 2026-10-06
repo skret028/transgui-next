@@ -255,6 +255,7 @@ function AppInner() {
       setHiddenRefresh(savedHiddenRefresh);
       setMinimizeToTray(savedMinimizeToTray);
       minimizeToTrayRef.current = savedMinimizeToTray;
+      void rpc.setCloseToTray(savedMinimizeToTray);
       setViewOptions(savedViewOptions);
       if (hasSaved) void connect(saved);
     })();
@@ -557,6 +558,7 @@ function AppInner() {
   const changeMinimizeToTray = useCallback((on: boolean) => {
     setMinimizeToTray(on);
     minimizeToTrayRef.current = on;
+    void rpc.setCloseToTray(on);
     void saveMinimizeToTray(on);
   }, []);
 
@@ -578,11 +580,8 @@ function AppInner() {
             event.preventDefault();
             return;
           }
-          try {
-            await win.destroy();
-          } catch {
-            // window-destroy not permitted in this build
-          }
+          // Otherwise let the close go ahead: the backend's handler decides
+          // whether that hides to the tray or quits.
         });
       } catch {
         // not running under Tauri

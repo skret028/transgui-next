@@ -13,6 +13,17 @@ use tauri::{AppHandle, Manager, WindowEvent};
 /// button can hide-to-tray instead of quitting.
 pub struct QuitFlag(pub AtomicBool);
 
+/// Whether closing the window hides it to the tray (the default) or quits.
+///
+/// Pushed from the UI so the Rust close handler can honour the setting without
+/// needing the window-destroy capability, which this build does not grant.
+pub struct CloseToTray(pub AtomicBool);
+
+#[tauri::command]
+fn set_close_to_tray(state: tauri::State<'_, CloseToTray>, hide: bool) {
+    state.0.store(hide, Ordering::SeqCst);
+}
+
 /// Paths and magnet links the OS asked us to open.
 ///
 /// A file-open request can arrive before the webview has registered its
@@ -200,6 +211,7 @@ pub fn run() {
         )
         .manage(AppState::new())
         .manage(QuitFlag(AtomicBool::new(false)))
+        .manage(CloseToTray(AtomicBool::new(true)))
         .manage(PendingOpens::default())
         .invoke_handler(tauri::generate_handler![
             rpc::rpc_connect,
@@ -219,6 +231,7 @@ pub fn run() {
             rpc::rpc_rename_path,
             rpc::rpc_set_location,
             take_pending_opens,
+            set_close_to_tray,
             rpc_reveal_path,
             write_text_file,
             read_text_file,
@@ -243,6 +256,19 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                let handle = window.app_handle();
+                let to_tray = handle
+                    .try_state::<CloseToTray>()
+                    .map(|f| f.0.load(Ordering::SeqCst))
+                    .unwrap_or(true);
+                if !to_tray {
+                    // The user turned the tray behaviour off: close means quit.
+                    if let Some(flag) = handle.try_state::<QuitFlag>() {
+                        flag.0.store(true, Ordering::SeqCst);
+                    }
+                    handle.exit(0);
+                    return;
+                }
                 let quitting = window
                     .app_handle()
                     .try_state::<QuitFlag>()
