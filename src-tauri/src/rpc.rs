@@ -28,6 +28,20 @@ pub struct ConnConfig {
     pub https: Option<bool>,
     #[serde(default)]
     pub accept_invalid_certs: Option<bool>,
+    /// PEM files for mutual TLS. Read by this client only; like the password
+    /// they are never handed back to the UI.
+    #[serde(default)]
+    pub client_cert: Option<String>,
+    #[serde(default)]
+    pub client_key: Option<String>,
+}
+
+/// Some(path) unless the field is empty, so "unset" and "" behave the same.
+fn nonempty(value: &Option<String>) -> Option<String> {
+    value
+        .as_ref()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
 }
 
 struct ConnState {
@@ -184,6 +198,22 @@ pub async fn rpc_connect(state: State<'_, AppState>, config: ConnConfig) -> Resu
     let mut builder = reqwest::Client::builder().user_agent("transgui-next/0.1");
     if config.accept_invalid_certs.unwrap_or(false) {
         builder = builder.danger_accept_invalid_certs(true);
+    }
+    // Mutual TLS. Unlike the proxy settings, this needs nothing from the daemon
+    // — it is this client's own TLS identity — so it works on Transmission 4.x.
+    match (nonempty(&config.client_cert), nonempty(&config.client_key)) {
+        (Some(cert_path), Some(key_path)) => {
+            let mut pem = std::fs::read(&cert_path)
+                .map_err(|e| format!("客户端证书读取失败 {cert_path}: {e}"))?;
+            pem.extend_from_slice(
+                &std::fs::read(&key_path).map_err(|e| format!("私钥读取失败 {key_path}: {e}"))?,
+            );
+            let identity = reqwest::Identity::from_pem(&pem)
+                .map_err(|e| format!("客户端证书或私钥无效：{e}"))?;
+            builder = builder.identity(identity);
+        }
+        (None, None) => {}
+        _ => return Err("客户端证书和私钥必须同时指定，或同时留空".into()),
     }
     let client = builder
         .build()

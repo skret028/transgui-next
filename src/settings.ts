@@ -15,6 +15,8 @@ export const DEFAULT_FORM: ConnForm = {
   password: "",
   https: false,
   acceptInvalid: false,
+  clientCert: "",
+  clientKey: "",
 };
 
 let storePromise: Promise<Store> | null = null;

@@ -49,6 +49,8 @@ function stripForm(form: Partial<ConnForm> | undefined, fallback: Partial<ConnFo
     username: str(f.username),
     https: !!f.https,
     acceptInvalid: !!f.acceptInvalid,
+    clientCert: String(f.clientCert ?? ""),
+    clientKey: String(f.clientKey ?? ""),
   };
 }
 
@@ -123,6 +125,8 @@ export function parseSettingsFile(text: string): ImportResult {
       username: "",
       https: false,
       acceptInvalid: false,
+      clientCert: "",
+      clientKey: "",
     });
   }
   if (Array.isArray(obj.servers)) {
@@ -138,6 +142,8 @@ export function parseSettingsFile(text: string): ImportResult {
           username: "",
           https: false,
           acceptInvalid: false,
+          clientCert: "",
+          clientKey: "",
         }),
       }));
   }

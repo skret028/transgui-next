@@ -1,6 +1,13 @@
 import { useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { ConnForm, ServerBookmark } from "../types";
 import { useT } from "../i18n";
+
+/** Ask for a PEM file. Only the path is kept - never the key material. */
+async function pickPem(title: string, onPicked: (path: string) => void) {
+  const picked = await open({ title, multiple: false, directory: false });
+  if (typeof picked === "string") onPicked(picked);
+}
 
 interface Props {
   form: ConnForm;
@@ -132,6 +139,42 @@ export function ConnectionBar({
           disabled={locked}
         />
         HTTPS
+      </label>
+      <label className="chk">
+        <span className="muted">{t("Client Certificate")}</span>
+        <input
+          type="text"
+          placeholder="client.crt"
+          value={form.clientCert}
+          onChange={(e) => onChange("clientCert", e.target.value)}
+          disabled={locked}
+        />
+        <button
+          type="button"
+          className="btn"
+          disabled={locked}
+          onClick={() => void pickPem(t("Client Certificate"), (p) => onChange("clientCert", p))}
+        >
+          {t("Browse…")}
+        </button>
+      </label>
+      <label className="chk">
+        <span className="muted">{t("Private Key")}</span>
+        <input
+          type="text"
+          placeholder="client.key"
+          value={form.clientKey}
+          onChange={(e) => onChange("clientKey", e.target.value)}
+          disabled={locked}
+        />
+        <button
+          type="button"
+          className="btn"
+          disabled={locked}
+          onClick={() => void pickPem(t("Private Key"), (p) => onChange("clientKey", p))}
+        >
+          {t("Browse…")}
+        </button>
       </label>
       {connected ? (
         <button className="btn danger" onClick={onDisconnect}>

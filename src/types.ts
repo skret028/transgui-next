@@ -98,6 +98,9 @@ export interface ConnForm {
   password: string;
   https: boolean;
   acceptInvalid: boolean;
+  /** PEM files for mutual TLS; empty means the daemon needs no client cert. */
+  clientCert: string;
+  clientKey: string;
 }
 
 /** A saved server/connection bookmark. */

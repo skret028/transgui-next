@@ -24,6 +24,8 @@ export const rpc = {
         password: form.password,
         https: form.https,
         accept_invalid_certs: form.acceptInvalid,
+        client_cert: form.clientCert,
+        client_key: form.clientKey,
       },
     }),
 
