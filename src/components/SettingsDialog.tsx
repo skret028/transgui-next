@@ -4,6 +4,11 @@ import { useT } from "../i18n";
 import { rpc, type GeoIpStatus } from "../api";
 import type { SessionInfo } from "../types";
 import type { PathMapping } from "../paths";
+import type {
+  HiddenRefresh,
+  StatusBarFields,
+  UiFontSize,
+} from "../settings";
 
 interface Props {
   onLoad: () => Promise<SessionInfo>;
@@ -12,6 +17,18 @@ interface Props {
   /** Client-side preference: kept in the local store, not on the daemon. */
   notifyOnComplete: boolean;
   onNotifyChange: (on: boolean) => void;
+  /** Client-side: interface text scale. */
+  uiFontSize: UiFontSize;
+  onUiFontSizeChange: (size: UiFontSize) => void;
+  /** Client-side: which status-bar fields are shown. */
+  statusFields: StatusBarFields;
+  onStatusFieldsChange: (fields: StatusBarFields) => void;
+  /** Client-side: slower polling while the window is hidden. */
+  hiddenRefresh: HiddenRefresh;
+  onHiddenRefreshChange: (value: HiddenRefresh) => void;
+  /** Client-side: hide to the tray on close instead of quitting. */
+  minimizeToTray: boolean;
+  onMinimizeToTrayChange: (on: boolean) => void;
   /** Client-side too: how daemon paths map onto this machine. */
   pathMap: PathMapping[];
   onPathMapChange: (list: PathMapping[]) => void;
@@ -238,6 +255,14 @@ export function SettingsDialog({
   onApply,
   notifyOnComplete,
   onNotifyChange,
+  uiFontSize,
+  onUiFontSizeChange,
+  statusFields,
+  onStatusFieldsChange,
+  hiddenRefresh,
+  onHiddenRefreshChange,
+  minimizeToTray,
+  onMinimizeToTrayChange,
   pathMap,
   onPathMapChange,
   onExportSettings,
@@ -795,6 +820,80 @@ export function SettingsDialog({
             {t("Notify me when a download finishes")}
           </label>
           <p className="muted">{t("Kept on this machine, not on the daemon.")}</p>
+
+          <div className="kv-inline">
+            <span className="muted">{t("Font size")}</span>
+            <select
+              className="speed-select"
+              value={uiFontSize}
+              onChange={(e) => onUiFontSizeChange(e.target.value as UiFontSize)}
+            >
+              <option value="small">{t("Small")}</option>
+              <option value="medium">{t("Medium")}</option>
+              <option value="large">{t("Large")}</option>
+            </select>
+          </div>
+
+          <div className="group">{t("Status bar fields")}</div>
+          <div className="kv-inline">
+            {(
+              [
+                ["total", "Torrent count"],
+                ["shown", "Match count"],
+                ["selected", "Selected count"],
+                ["updated", "Last updated"],
+                ["hint", "Hints"],
+                ["doubleClick", "Double-click hint"],
+              ] as [keyof StatusBarFields, string][]
+            ).map(([key, label]) => (
+              <label className="chk" key={key}>
+                <input
+                  type="checkbox"
+                  checked={statusFields[key]}
+                  onChange={(e) =>
+                    onStatusFieldsChange({ ...statusFields, [key]: e.target.checked })
+                  }
+                />
+                {t(label)}
+              </label>
+            ))}
+          </div>
+
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={hiddenRefresh.enabled}
+                onChange={(e) =>
+                  onHiddenRefreshChange({ ...hiddenRefresh, enabled: e.target.checked })
+                }
+              />
+              {t("Reduce refresh rate when the window is hidden")}
+            </label>
+            <input
+              className="narrow"
+              type="number"
+              min={1}
+              value={hiddenRefresh.seconds}
+              disabled={!hiddenRefresh.enabled}
+              onChange={(e) =>
+                onHiddenRefreshChange({
+                  ...hiddenRefresh,
+                  seconds: Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                })
+              }
+            />
+            <span className="muted">{t("seconds")}</span>
+          </div>
+
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={minimizeToTray}
+              onChange={(e) => onMinimizeToTrayChange(e.target.checked)}
+            />
+            {t("Close to tray")}
+          </label>
 
           <div className="pathmap">
             <div className="pathmap-head">

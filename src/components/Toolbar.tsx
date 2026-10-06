@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useT } from "../i18n";
 
 interface Props {
@@ -5,6 +6,13 @@ interface Props {
   selectedCount: number;
   autoRefresh: boolean;
   refreshMs: number;
+  big: boolean;
+  /** Daemon session values for the quick speed controls. */
+  altSpeedEnabled: boolean;
+  speedDown: number;
+  speedDownEnabled: boolean;
+  speedUp: number;
+  speedUpEnabled: boolean;
   onAction: (action: string) => void;
   onGlobalAction: (action: string) => void;
   onOpenAdd: () => void;
@@ -14,6 +22,47 @@ interface Props {
   onOpenStats: () => void;
   onRefresh: () => void;
   onAutoRefreshChange: (value: boolean) => void;
+  onToggleAltSpeed: () => void;
+  onSetSpeed: (which: "down" | "up", kbps: number | null) => void;
+  /** Refresh the cached session so the menus show the daemon's current values. */
+  onLoadSession: () => void;
+}
+
+/** Presets shared by both directions; 0 means unlimited (handled as a null). */
+const SPEED_PRESETS = [1, 5, 10, 50, 100, 500];
+
+function SpeedSelect({
+  label,
+  kbps,
+  enabled,
+  onChange,
+}: {
+  label: string;
+  kbps: number;
+  enabled: boolean;
+  onChange: (kbps: number | null) => void;
+}) {
+  const t = useT();
+  const value = enabled ? String(kbps) : "";
+  const custom = enabled && kbps > 0 && !SPEED_PRESETS.includes(kbps);
+  return (
+    <label className="kv-inline">
+      <span className="muted">{label}</span>
+      <select
+        className="speed-select"
+        value={value}
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+      >
+        <option value="">{t("Unlimited")}</option>
+        {custom && <option value={String(kbps)}>{kbps} KB/s</option>}
+        {SPEED_PRESETS.map((p) => (
+          <option key={p} value={p}>
+            {p} KB/s
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 }
 
 export function Toolbar({
@@ -21,6 +70,12 @@ export function Toolbar({
   selectedCount,
   autoRefresh,
   refreshMs,
+  big,
+  altSpeedEnabled,
+  speedDown,
+  speedDownEnabled,
+  speedUp,
+  speedUpEnabled,
   onAction,
   onGlobalAction,
   onOpenAdd,
@@ -30,13 +85,17 @@ export function Toolbar({
   onOpenStats,
   onRefresh,
   onAutoRefreshChange,
+  onToggleAltSpeed,
+  onSetSpeed,
+  onLoadSession,
 }: Props) {
   const t = useT();
   const needSel = selectedCount === 0;
   const busy = !connected || needSel;
+  const [speedOpen, setSpeedOpen] = useState(false);
 
   return (
-    <section className="toolbar">
+    <section className={`toolbar${big ? " big" : ""}`}>
       <button className="btn" onClick={() => onAction("start")} disabled={busy}>
         {t("Start")}
       </button>
@@ -96,6 +155,51 @@ export function Toolbar({
       <button className="btn" onClick={onOpenStats} disabled={!connected}>
         {t("Statistics")}
       </button>
+
+      {/* Quick session-wide speed controls. */}
+      <div className="dropdown-wrap">
+        <button
+          className="btn"
+          title={t("Speed limits")}
+          disabled={!connected}
+          onClick={() => {
+            setSpeedOpen((o) => !o);
+            onLoadSession();
+          }}
+        >
+          {t("Speed limits")} ▾
+        </button>
+        {speedOpen && (
+          <>
+            <div className="dropdown-backdrop" onClick={() => setSpeedOpen(false)} />
+            <div className="dropdown speed-menu">
+              <SpeedSelect
+                label={t("Download")}
+                kbps={speedDown}
+                enabled={speedDownEnabled}
+                onChange={(v) => onSetSpeed("down", v)}
+              />
+              <SpeedSelect
+                label={t("Upload")}
+                kbps={speedUp}
+                enabled={speedUpEnabled}
+                onChange={(v) => onSetSpeed("up", v)}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <button
+        className={`btn${altSpeedEnabled ? " primary" : ""}`}
+        title={t("Toggle alternative speed limits")}
+        onClick={onToggleAltSpeed}
+        disabled={!connected}
+        aria-pressed={altSpeedEnabled}
+      >
+        {t("Alt speeds")}
+      </button>
+
       <button className="btn primary" onClick={onOpenAdd} disabled={!connected}>
         {t("Add torrent…")}
       </button>

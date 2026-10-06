@@ -598,5 +598,20 @@
   "Data: DB-IP Lite (CC BY 4.0)": "数据：DB-IP Lite（CC BY 4.0）",
   "Download…": "下载…",
   "Update": "更新",
-  "Browse…": "浏览…"
+  "Browse…": "浏览…",
+  "Small": "小",
+  "Medium": "中",
+  "Large": "大",
+  "Alt speeds": "备用带宽",
+  "Toggle alternative speed limits": "切换备用带宽限速",
+  "Big toolbar": "大工具条",
+  "Details pane": "详情面板",
+  "Status bar fields": "状态栏字段",
+  "Match count": "筛选结果数",
+  "Selected count": "选中数量",
+  "Last updated": "最后更新",
+  "Hints": "提示",
+  "Double-click hint": "双击提示",
+  "Double-click a torrent to open details": "双击种子查看详情",
+  "Reduce refresh rate when the window is hidden": "窗口隐藏时降低刷新频率"
 }

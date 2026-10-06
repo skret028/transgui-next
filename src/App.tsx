@@ -1,23 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { rpc } from "./api";
 import {
   DEFAULT_FORM,
+  DEFAULT_HIDDEN_REFRESH,
+  DEFAULT_STATUS_FIELDS,
+  DEFAULT_VIEW_OPTIONS,
   loadColumns,
   loadConnForm,
+  loadHiddenRefresh,
   loadLocale,
+  loadMinimizeToTray,
   loadNotifyOnComplete,
   loadPathMap,
   loadServers,
+  loadStatusBarFields,
+  loadUiFontSize,
+  loadViewOptions,
   saveColumns,
   saveConnForm,
+  saveHiddenRefresh,
   saveLocale,
+  saveMinimizeToTray,
   saveNotifyOnComplete,
   savePathMap,
   saveServers,
+  saveStatusBarFields,
+  saveUiFontSize,
+  saveViewOptions,
+  type HiddenRefresh,
+  type StatusBarFields,
+  type UiFontSize,
+  type ViewOptions,
 } from "./settings";
 import { revealPathFor, type PathMapping } from "./paths";
 import { buildSettingsFile, parseSettingsFile } from "./settingsFile";
@@ -34,7 +52,14 @@ import {
   type SortDir,
   type SortKey,
 } from "./torrentList";
-import type { AddTorrentOptions, ConnForm, ServerBookmark, Torrent, TorrentDetail } from "./types";
+import type {
+  AddTorrentOptions,
+  ConnForm,
+  ServerBookmark,
+  SessionInfo,
+  Torrent,
+  TorrentDetail,
+} from "./types";
 import {
   availableLocales,
   DEFAULT_LOCALE,
@@ -54,6 +79,7 @@ import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
 import { StatsDialog } from "./components/StatsDialog";
 import { ColumnsDialog } from "./components/ColumnsDialog";
 import { FilterPane } from "./components/FilterPane";
+import { ViewMenu } from "./components/ViewMenu";
 import { DEFAULT_COLUMNS, normalizeColumns, type ColumnId } from "./columns";
 import { notify } from "./notify";
 import { listen } from "@tauri-apps/api/event";
@@ -84,6 +110,11 @@ function AppInner() {
   const [pathMap, setPathMap] = useState<PathMapping[]>([]);
   /** Transient status-bar message, e.g. a just-finished download. */
   const [flash, setFlash] = useState("");
+  const [uiFontSize, setUiFontSize] = useState<UiFontSize>("medium");
+  const [statusFields, setStatusFields] = useState<StatusBarFields>(DEFAULT_STATUS_FIELDS);
+  const [hiddenRefresh, setHiddenRefresh] = useState<HiddenRefresh>(DEFAULT_HIDDEN_REFRESH);
+  const [minimizeToTray, setMinimizeToTray] = useState(true);
+  const [viewOptions, setViewOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
 
   const [detail, setDetail] = useState<TorrentDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -99,6 +130,10 @@ function AppInner() {
 
   const [servers, setServers] = useState<ServerBookmark[]>([]);
   const [selectedServerId, setSelectedServerId] = useState("");
+  /** Daemon session values backing the quick alt-speed and limit controls. */
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  /** Whether the window is currently hidden/backgrounded. */
+  const [documentHidden, setDocumentHidden] = useState(false);
 
   const timer = useRef<number | null>(null);
   const anchor = useRef<number | null>(null);
@@ -107,6 +142,8 @@ function AppInner() {
   const notifiedRef = useRef<Set<number>>(new Set());
   /** Whether the baseline (first list of the session) has been taken. */
   const seededRef = useRef(false);
+  /** Live value for the window close handler (which is registered once). */
+  const minimizeToTrayRef = useRef(true);
 
   const visible = useMemo(
     () =>
@@ -202,12 +239,23 @@ function AppInner() {
       const savedColumns = await loadColumns();
       const notifyPref = await loadNotifyOnComplete();
       const savedPathMap = await loadPathMap();
+      const savedFont = await loadUiFontSize();
+      const savedStatusFields = await loadStatusBarFields();
+      const savedHiddenRefresh = await loadHiddenRefresh();
+      const savedMinimizeToTray = await loadMinimizeToTray();
+      const savedViewOptions = await loadViewOptions();
       if (cancelled) return;
       setForm(saved);
       setServers(savedServers);
       setColumns(normalizeColumns(savedColumns));
       setNotifyOnComplete(notifyPref);
       setPathMap(savedPathMap);
+      setUiFontSize(savedFont);
+      setStatusFields(savedStatusFields);
+      setHiddenRefresh(savedHiddenRefresh);
+      setMinimizeToTray(savedMinimizeToTray);
+      minimizeToTrayRef.current = savedMinimizeToTray;
+      setViewOptions(savedViewOptions);
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -216,17 +264,35 @@ function AppInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-refresh loop for the list and any open details panel.
+  // Interface text scale: a data attribute on <html>, styled by App.css.
+  useEffect(() => {
+    document.documentElement.dataset.fontSize = uiFontSize;
+  }, [uiFontSize]);
+
+  // Track page visibility so the polling interval can back off while hidden.
+  useEffect(() => {
+    const onVisibility = () => setDocumentHidden(document.hidden);
+    onVisibility();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  // Auto-refresh loop for the list and any open details panel. When the window
+  // is hidden and the user opted in, poll at the slower interval instead.
   useEffect(() => {
     if (!connected || !autoRefresh) return;
+    const interval =
+      documentHidden && hiddenRefresh.enabled
+        ? Math.max(1, hiddenRefresh.seconds) * 1000
+        : REFRESH_MS;
     timer.current = window.setInterval(() => {
       void refresh();
       void refreshDetail();
-    }, REFRESH_MS);
+    }, interval);
     return () => {
       if (timer.current) window.clearInterval(timer.current);
     };
-  }, [connected, autoRefresh, refresh, refreshDetail]);
+  }, [connected, autoRefresh, documentHidden, hiddenRefresh, refresh, refreshDetail]);
 
   const onRowClick = useCallback(
     (id: number, e: MouseEvent) => {
@@ -344,6 +410,43 @@ function AppInner() {
   // prop, so a fresh arrow here would wipe unsaved edits on every poll tick.
   const loadSession = useCallback(() => rpc.session(), []);
 
+  /** Cached session snapshot for the toolbar's quick speeds / alt-speed button. */
+  const loadSessionInfo = useCallback(async () => {
+    try {
+      setSession(await rpc.session());
+    } catch {
+      // keep the previous snapshot; the poll or the next open will retry
+    }
+  }, []);
+
+  // Fetch the daemon's session once connected so the quick controls reflect it.
+  useEffect(() => {
+    if (connected) void loadSessionInfo();
+  }, [connected, loadSessionInfo]);
+
+  const toggleAltSpeed = useCallback(async () => {
+    const next = !session?.["alt-speed-enabled"];
+    try {
+      await rpc.setSession({ "alt-speed-enabled": next });
+      setSession((s) => (s ? { ...s, "alt-speed-enabled": next } : s));
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [session]);
+
+  const setSpeedLimit = useCallback(async (which: "down" | "up", kbps: number | null) => {
+    const patch: Record<string, unknown> =
+      which === "down"
+        ? { "speed-limit-down-enabled": kbps != null, "speed-limit-down": kbps ?? 0 }
+        : { "speed-limit-up-enabled": kbps != null, "speed-limit-up": kbps ?? 0 };
+    try {
+      await rpc.setSession(patch);
+      setSession((s) => (s ? ({ ...s, ...patch } as SessionInfo) : s));
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
   const applySettings = useCallback(
     async (patch: Record<string, unknown>) => {
       await rpc.setSession(patch);
@@ -434,6 +537,58 @@ function AppInner() {
   const changePathMap = useCallback((list: PathMapping[]) => {
     setPathMap(list);
     void savePathMap(list);
+  }, []);
+
+  const changeUiFontSize = useCallback((size: UiFontSize) => {
+    setUiFontSize(size);
+    void saveUiFontSize(size);
+  }, []);
+
+  const changeStatusFields = useCallback((fields: StatusBarFields) => {
+    setStatusFields(fields);
+    void saveStatusBarFields(fields);
+  }, []);
+
+  const changeHiddenRefresh = useCallback((value: HiddenRefresh) => {
+    setHiddenRefresh(value);
+    void saveHiddenRefresh(value);
+  }, []);
+
+  const changeMinimizeToTray = useCallback((on: boolean) => {
+    setMinimizeToTray(on);
+    minimizeToTrayRef.current = on;
+    void saveMinimizeToTray(on);
+  }, []);
+
+  const changeViewOptions = useCallback((value: ViewOptions) => {
+    setViewOptions(value);
+    void saveViewOptions(value);
+  }, []);
+
+  // Close button: hide to the tray when enabled (the backend already does this),
+  // otherwise force the window closed. destroy() is best-effort — it needs the
+  // window-destroy capability, so a denial just falls back to the hide.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        const win = getCurrentWindow();
+        unlisten = await win.onCloseRequested(async (event) => {
+          if (minimizeToTrayRef.current) {
+            event.preventDefault();
+            return;
+          }
+          try {
+            await win.destroy();
+          } catch {
+            // window-destroy not permitted in this build
+          }
+        });
+      } catch {
+        // not running under Tauri
+      }
+    })();
+    return () => unlisten?.();
   }, []);
 
   // Settings export/import. Passwords are never written out.
@@ -683,6 +838,7 @@ function AppInner() {
             </option>
           ))}
         </select>
+        <ViewMenu view={viewOptions} onChange={changeViewOptions} />
         <button className="btn" onClick={() => setShowColumns(true)}>
           {t("Columns")}…
         </button>
@@ -704,27 +860,40 @@ function AppInner() {
 
       {error && <div className="error">{error}</div>}
 
-      <Toolbar
-        connected={connected}
-        selectedCount={selection.size}
-        autoRefresh={autoRefresh}
-        refreshMs={REFRESH_MS}
-        onAction={action}
-        onGlobalAction={globalAction}
-        onOpenAdd={() => setShowAdd(true)}
-        onOpenSettings={() => setShowSettings(true)}
-        onOpenLabels={() => setShowLabels(true)}
-        onOpenProps={() => setShowProps(true)}
-        onOpenStats={openStats}
-        onRefresh={() => {
-          void refresh();
-          void refreshDetail();
-        }}
-        onAutoRefreshChange={setAutoRefresh}
-      />
+      {viewOptions.toolbar && (
+        <Toolbar
+          connected={connected}
+          selectedCount={selection.size}
+          autoRefresh={autoRefresh}
+          refreshMs={REFRESH_MS}
+          big={viewOptions.bigToolbar}
+          altSpeedEnabled={!!session?.["alt-speed-enabled"]}
+          speedDown={Number(session?.["speed-limit-down"] ?? 0)}
+          speedDownEnabled={!!session?.["speed-limit-down-enabled"]}
+          speedUp={Number(session?.["speed-limit-up"] ?? 0)}
+          speedUpEnabled={!!session?.["speed-limit-up-enabled"]}
+          onAction={action}
+          onGlobalAction={globalAction}
+          onOpenAdd={() => setShowAdd(true)}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenLabels={() => setShowLabels(true)}
+          onOpenProps={() => setShowProps(true)}
+          onOpenStats={openStats}
+          onRefresh={() => {
+            void refresh();
+            void refreshDetail();
+          }}
+          onAutoRefreshChange={setAutoRefresh}
+          onToggleAltSpeed={toggleAltSpeed}
+          onSetSpeed={setSpeedLimit}
+          onLoadSession={loadSessionInfo}
+        />
+      )}
 
       <div className="main-area">
-        <FilterPane torrents={torrents} selection={filterSel} onSelect={setFilterSel} />
+        {viewOptions.filterPane && (
+          <FilterPane torrents={torrents} selection={filterSel} onSelect={setFilterSel} />
+        )}
 
         <div className="list-area">
           <TorrentTable
@@ -741,31 +910,42 @@ function AppInner() {
             onOpenDetails={openDetails}
           />
 
-          <DetailsPanel
-            detail={detail}
-            loading={detailLoading}
-            revealTarget={revealTarget}
-            onClose={() => {
-              detailIdRef.current = null;
-              setDetail(null);
-            }}
-            onRefresh={refreshDetail}
-          />
+          {viewOptions.details && (
+            <DetailsPanel
+              detail={detail}
+              loading={detailLoading}
+              revealTarget={revealTarget}
+              onClose={() => {
+                detailIdRef.current = null;
+                setDetail(null);
+              }}
+              onRefresh={refreshDetail}
+            />
+          )}
         </div>
       </div>
 
-      <footer className="statusbar">
-        <span>
-          {t("{n} torrents", { n: torrents.length })}
-          {visible.length !== torrents.length
-            ? ` · ${t("{n} shown", { n: visible.length })}`
-            : ""}
-        </span>
-        {selection.size > 0 && <span>{t("{n} selected", { n: selection.size })}</span>}
-        <span className="spacer" />
-        {flash && <span className="up">{flash}</span>}
-        {lastUpdate && <span>{t("Updated {time}", { time: lastUpdate.toLocaleTimeString() })}</span>}
-      </footer>
+      {viewOptions.statusBar && (
+        <footer className="statusbar">
+          {statusFields.total && (
+            <span>{t("{n} torrents", { n: torrents.length })}</span>
+          )}
+          {statusFields.shown && visible.length !== torrents.length && (
+            <span>{t("{n} shown", { n: visible.length })}</span>
+          )}
+          {statusFields.selected && selection.size > 0 && (
+            <span>{t("{n} selected", { n: selection.size })}</span>
+          )}
+          {statusFields.doubleClick && (
+            <span className="muted">{t("Double-click a torrent to open details")}</span>
+          )}
+          <span className="spacer" />
+          {statusFields.hint && flash && <span className="up">{flash}</span>}
+          {statusFields.updated && lastUpdate && (
+            <span>{t("Updated {time}", { time: lastUpdate.toLocaleTimeString() })}</span>
+          )}
+        </footer>
+      )}
 
       {showAdd && (
         <AddTorrentDialog onClose={() => setShowAdd(false)} onSubmit={submitAdd} />
@@ -778,6 +958,14 @@ function AppInner() {
           onApply={applySettings}
           notifyOnComplete={notifyOnComplete}
           onNotifyChange={changeNotify}
+          uiFontSize={uiFontSize}
+          onUiFontSizeChange={changeUiFontSize}
+          statusFields={statusFields}
+          onStatusFieldsChange={changeStatusFields}
+          hiddenRefresh={hiddenRefresh}
+          onHiddenRefreshChange={changeHiddenRefresh}
+          minimizeToTray={minimizeToTray}
+          onMinimizeToTrayChange={changeMinimizeToTray}
           pathMap={pathMap}
           onPathMapChange={changePathMap}
           onExportSettings={exportSettings}

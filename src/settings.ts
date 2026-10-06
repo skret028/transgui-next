@@ -132,3 +132,143 @@ export async function savePathMap(list: PathMapping[]): Promise<void> {
   await store.set(PATH_MAP_KEY, list);
   await store.save();
 }
+
+/** Interface text scale, applied to the root element as a data attribute. */
+export type UiFontSize = "small" | "medium" | "large";
+
+const UI_FONT_KEY = "uiFontSize";
+
+export async function loadUiFontSize(): Promise<UiFontSize> {
+  try {
+    const store = await getStore();
+    const value = await store.get<UiFontSize>(UI_FONT_KEY);
+    return value === "small" || value === "large" ? value : "medium";
+  } catch {
+    return "medium";
+  }
+}
+
+export async function saveUiFontSize(size: UiFontSize): Promise<void> {
+  const store = await getStore();
+  await store.set(UI_FONT_KEY, size);
+  await store.save();
+}
+
+/** Which fields the bottom status bar renders. */
+export interface StatusBarFields {
+  total: boolean;
+  shown: boolean;
+  selected: boolean;
+  updated: boolean;
+  hint: boolean;
+  doubleClick: boolean;
+}
+
+export const DEFAULT_STATUS_FIELDS: StatusBarFields = {
+  total: true,
+  shown: true,
+  selected: true,
+  updated: true,
+  hint: true,
+  doubleClick: true,
+};
+
+const STATUS_FIELDS_KEY = "statusBarFields";
+
+export async function loadStatusBarFields(): Promise<StatusBarFields> {
+  try {
+    const store = await getStore();
+    const value = await store.get<Partial<StatusBarFields>>(STATUS_FIELDS_KEY);
+    if (value && typeof value === "object") return { ...DEFAULT_STATUS_FIELDS, ...value };
+  } catch {
+    // fall through to defaults
+  }
+  return DEFAULT_STATUS_FIELDS;
+}
+
+export async function saveStatusBarFields(fields: StatusBarFields): Promise<void> {
+  const store = await getStore();
+  await store.set(STATUS_FIELDS_KEY, fields);
+  await store.save();
+}
+
+/** A longer polling interval to use while the window is hidden. */
+export interface HiddenRefresh {
+  enabled: boolean;
+  seconds: number;
+}
+
+export const DEFAULT_HIDDEN_REFRESH: HiddenRefresh = { enabled: false, seconds: 10 };
+
+const HIDDEN_REFRESH_KEY = "hiddenRefresh";
+
+export async function loadHiddenRefresh(): Promise<HiddenRefresh> {
+  try {
+    const store = await getStore();
+    const value = await store.get<Partial<HiddenRefresh>>(HIDDEN_REFRESH_KEY);
+    if (value && typeof value === "object") return { ...DEFAULT_HIDDEN_REFRESH, ...value };
+  } catch {
+    // fall through to defaults
+  }
+  return DEFAULT_HIDDEN_REFRESH;
+}
+
+export async function saveHiddenRefresh(value: HiddenRefresh): Promise<void> {
+  const store = await getStore();
+  await store.set(HIDDEN_REFRESH_KEY, value);
+  await store.save();
+}
+
+const MINIMIZE_TRAY_KEY = "minimizeToTray";
+
+/** Hide to the tray on close instead of quitting. Defaults to on (current behavior). */
+export async function loadMinimizeToTray(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(MINIMIZE_TRAY_KEY)) ?? true;
+  } catch {
+    return true;
+  }
+}
+
+export async function saveMinimizeToTray(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(MINIMIZE_TRAY_KEY, on);
+  await store.save();
+}
+
+/** Which chrome regions are visible. */
+export interface ViewOptions {
+  toolbar: boolean;
+  filterPane: boolean;
+  details: boolean;
+  statusBar: boolean;
+  bigToolbar: boolean;
+}
+
+export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
+  toolbar: true,
+  filterPane: true,
+  details: true,
+  statusBar: true,
+  bigToolbar: false,
+};
+
+const VIEW_OPTIONS_KEY = "viewOptions";
+
+export async function loadViewOptions(): Promise<ViewOptions> {
+  try {
+    const store = await getStore();
+    const value = await store.get<Partial<ViewOptions>>(VIEW_OPTIONS_KEY);
+    if (value && typeof value === "object") return { ...DEFAULT_VIEW_OPTIONS, ...value };
+  } catch {
+    // fall through to defaults
+  }
+  return DEFAULT_VIEW_OPTIONS;
+}
+
+export async function saveViewOptions(value: ViewOptions): Promise<void> {
+  const store = await getStore();
+  await store.set(VIEW_OPTIONS_KEY, value);
+  await store.save();
+}
