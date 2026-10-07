@@ -367,6 +367,7 @@
   "Import settings": "导入设置",
   "Size left": "剩余大小",
   "Always auto-reconnect": "总是自动重新连接",
+  "Keep trying to reconnect when the connection to the daemon drops, with a growing delay.": "与 daemon 的连接断开后持续尝试重连，间隔逐次变长。",
   "The maximum history of directories for storage of torrents": "Torrent 储存目录的最大历史记录",
   "Delete destination folder": "删除目标文件夹",
   "Template:  ": "模板：",

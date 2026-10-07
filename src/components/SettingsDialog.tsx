@@ -44,6 +44,9 @@ interface Props {
   /** Client-side: keep the tray icon visible while the main window is shown. */
   trayAlwaysVisible: boolean;
   onTrayAlwaysVisibleChange: (on: boolean) => void;
+  /** Client-side: retry a dropped connection instead of waiting for a click. */
+  autoReconnect: boolean;
+  onAutoReconnectChange: (on: boolean) => void;
 }
 
 interface Fields {
@@ -282,6 +285,8 @@ export function SettingsDialog({
   onSmoothSpeedsChange,
   trayAlwaysVisible,
   onTrayAlwaysVisibleChange,
+  autoReconnect,
+  onAutoReconnectChange,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -962,6 +967,18 @@ export function SettingsDialog({
           </label>
           <p className="muted">
             {t("Hide the tray icon while the main window is visible; it is restored when the window is hidden. macOS may not honour this.")}
+          </p>
+
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={autoReconnect}
+              onChange={(e) => onAutoReconnectChange(e.target.checked)}
+            />
+            {t("Always auto-reconnect")}
+          </label>
+          <p className="muted">
+            {t("Keep trying to reconnect when the connection to the daemon drops, with a growing delay.")}
           </p>
 
           <div className="pathmap">

@@ -13,6 +13,7 @@ import {
   loadClipboardAutoAdd,
   loadColumns,
   loadConnForm,
+  loadAutoReconnect,
   loadHiddenRefresh,
   loadLocale,
   loadMinimizeToTray,
@@ -26,6 +27,7 @@ import {
   loadViewOptions,
   saveColumns,
   saveConnForm,
+  saveAutoReconnect,
   saveHiddenRefresh,
   saveLocale,
   saveMinimizeToTray,
@@ -142,6 +144,10 @@ function AppInner() {
   const [speedHistory, setSpeedHistory] = useState<SpeedHistory>({});
   /** Tray icon stays visible even while the window is shown. */
   const [trayAlwaysVisible, setTrayAlwaysVisible] = useState(true);
+  /** Retry a dropped connection instead of waiting for a manual click. */
+  const [autoReconnect, setAutoReconnect] = useState(true);
+  /** Where the reconnect loop currently is, for the status line. */
+  const [reconnecting, setReconnecting] = useState(false);
 
   const [detail, setDetail] = useState<TorrentDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -229,6 +235,10 @@ function AppInner() {
       setError("");
     } catch (e) {
       setError(String(e));
+      // A failing poll means the daemon is no longer answering. Treat the
+      // connection as down so the reconnect loop below can take over; leaving
+      // `connected` true would just repeat this error every two seconds.
+      setConnected(false);
     }
   }, []);
 
@@ -295,6 +305,7 @@ function AppInner() {
       const savedClipboardAuto = await loadClipboardAutoAdd();
       const savedSmoothSpeeds = await loadSmoothSpeeds();
       const savedTrayAlwaysVisible = await loadTrayAlwaysVisible();
+      const savedAutoReconnect = await loadAutoReconnect();
       if (cancelled) return;
       setForm(saved);
       setServers(savedServers);
@@ -312,6 +323,7 @@ function AppInner() {
       setSmoothSpeeds(savedSmoothSpeeds);
       setTrayAlwaysVisible(savedTrayAlwaysVisible);
       void rpc.setTrayAlwaysVisible(savedTrayAlwaysVisible);
+      setAutoReconnect(savedAutoReconnect);
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -349,6 +361,37 @@ function AppInner() {
       if (timer.current) window.clearInterval(timer.current);
     };
   }, [connected, autoRefresh, documentHidden, hiddenRefresh, refresh, refreshDetail]);
+
+  // Auto-reconnect. Only after a connection has succeeded once: a first-run
+  // dialog that was never filled in should not spin against a host that is
+  // simply not configured yet.
+  const everConnected = useRef(false);
+  useEffect(() => {
+    if (connected) everConnected.current = true;
+  }, [connected]);
+
+  useEffect(() => {
+    if (!autoReconnect || connected || !everConnected.current) return;
+    let cancelled = false;
+    let delay = 1000;
+    let timer = 0;
+    const attempt = () => {
+      if (cancelled) return;
+      setReconnecting(true);
+      void connect().finally(() => {
+        if (cancelled) return;
+        // Success flips `connected`, which tears this effect down before the
+        // next attempt is scheduled.
+        delay = Math.min(delay * 2, 30000);
+        timer = window.setTimeout(attempt, delay);
+      });
+    };
+    timer = window.setTimeout(attempt, delay);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [autoReconnect, connected, connect]);
 
   const onRowClick = useCallback(
     (id: number, e: MouseEvent) => {
@@ -765,6 +808,11 @@ function AppInner() {
     void saveTrayAlwaysVisible(on);
   }, []);
 
+  const changeAutoReconnect = useCallback((on: boolean) => {
+    setAutoReconnect(on);
+    void saveAutoReconnect(on);
+  }, []);
+
   // Opt-in clipboard watcher. Every couple of seconds, only while enabled and
   // connected, look for a torrent link the user has newly copied. A new link
   // opens the Add dialog pre-filled for review — it is never added silently.
@@ -835,6 +883,7 @@ function AppInner() {
       clipboardAutoAdd: clipboardAuto,
       smoothSpeeds,
       trayAlwaysVisible,
+      autoReconnect,
     });
     const target = await save({
       defaultPath: "transgui-next-settings.json",
@@ -858,6 +907,7 @@ function AppInner() {
     clipboardAuto,
     smoothSpeeds,
     trayAlwaysVisible,
+    autoReconnect,
     t,
   ]);
 
@@ -931,6 +981,7 @@ function AppInner() {
     if (s.uiFontSize !== undefined) changeUiFontSize(s.uiFontSize);
     if (s.statusBarFields !== undefined) changeStatusFields(s.statusBarFields);
     if (s.hiddenRefresh !== undefined) changeHiddenRefresh(s.hiddenRefresh);
+    if (s.autoReconnect !== undefined) changeAutoReconnect(s.autoReconnect);
     if (s.minimizeToTray !== undefined) changeMinimizeToTray(s.minimizeToTray);
     if (s.viewOptions !== undefined) changeViewOptions(s.viewOptions);
     if (s.clipboardAutoAdd !== undefined) changeClipboardAuto(s.clipboardAutoAdd);
@@ -1143,6 +1194,9 @@ function AppInner() {
 
       {error && <div className="error">{error}</div>}
       {notice && <div className="notice">{notice}</div>}
+      {reconnecting && !connected && (
+        <div className="notice">{t("Connecting to daemon")}…</div>
+      )}
       {rowMenu && (
         <ContextMenu
           x={rowMenu.x}
@@ -1284,6 +1338,8 @@ function AppInner() {
           onSmoothSpeedsChange={changeSmoothSpeeds}
           trayAlwaysVisible={trayAlwaysVisible}
           onTrayAlwaysVisibleChange={changeTrayAlwaysVisible}
+          autoReconnect={autoReconnect}
+          onAutoReconnectChange={changeAutoReconnect}
         />
       )}
 

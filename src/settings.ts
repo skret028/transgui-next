@@ -343,3 +343,26 @@ export async function saveTrayAlwaysVisible(on: boolean): Promise<void> {
   await store.set(TRAY_ALWAYS_KEY, on);
   await store.save();
 }
+
+const AUTO_RECONNECT_KEY = "autoReconnect";
+
+/**
+ * Keep trying to re-establish a dropped connection.
+ *
+ * On by default: a daemon restart should heal on its own rather than leaving a
+ * dead window until someone notices and clicks Connect.
+ */
+export async function loadAutoReconnect(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(AUTO_RECONNECT_KEY)) ?? true;
+  } catch {
+    return true;
+  }
+}
+
+export async function saveAutoReconnect(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(AUTO_RECONNECT_KEY, on);
+  await store.save();
+}

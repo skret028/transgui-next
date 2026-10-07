@@ -53,6 +53,7 @@ export interface SafeSettings {
   clipboardAutoAdd: boolean;
   smoothSpeeds: boolean;
   trayAlwaysVisible: boolean;
+  autoReconnect: boolean;
 }
 
 export interface SettingsFile extends SafeSettings {
@@ -190,6 +191,7 @@ export function buildSettingsFile(
     clipboardAutoAdd: !!settings.clipboardAutoAdd,
     smoothSpeeds: !!settings.smoothSpeeds,
     trayAlwaysVisible: settings.trayAlwaysVisible ?? DEFAULT_TRAY_ALWAYS_VISIBLE,
+    autoReconnect: settings.autoReconnect ?? true,
   };
 }
 
@@ -290,6 +292,7 @@ export function parseSettingsFile(text: string): ImportResult {
   settings.clipboardAutoAdd = bool(objData.clipboardAutoAdd, false);
   settings.smoothSpeeds = bool(objData.smoothSpeeds, DEFAULT_SMOOTH_SPEEDS);
   settings.trayAlwaysVisible = bool(objData.trayAlwaysVisible, DEFAULT_TRAY_ALWAYS_VISIBLE);
+  settings.autoReconnect = bool(objData.autoReconnect, true);
 
   // A file that carries a password was probably hand-edited; say so rather than
   // silently dropping it, because the user may expect it to be applied.
