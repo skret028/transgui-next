@@ -87,6 +87,7 @@ import { StatsDialog } from "./components/StatsDialog";
 import { ColumnsDialog } from "./components/ColumnsDialog";
 import { FilterPane } from "./components/FilterPane";
 import { ViewMenu } from "./components/ViewMenu";
+import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { DEFAULT_COLUMNS, normalizeColumns, type ColumnId } from "./columns";
 import { notify } from "./notify";
 import { listen } from "@tauri-apps/api/event";
@@ -109,6 +110,8 @@ function AppInner() {
   const [error, setError] = useState("");
   /** Transient green confirmation (e.g. "Copied"); cleared on a timer. */
   const [notice, setNotice] = useState("");
+  /** Where the torrent list's context menu is open, if it is. */
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number } | null>(null);
   const [torrents, setTorrents] = useState<Torrent[]>([]);
 
   const [selection, setSelection] = useState<Set<number>>(new Set());
@@ -465,6 +468,87 @@ function AppInner() {
       }
     },
     [selection, refresh, refreshDetail, t],
+  );
+
+  // A right-click on a row that is not already selected makes it the selection,
+  // so the menu acts on the torrent that was pointed at rather than on whatever
+  // happened to be selected before.
+  const openRowMenu = useCallback((id: number, x: number, y: number) => {
+    setSelection((prev) => (prev.has(id) ? prev : new Set([id])));
+    setRowMenu({ x, y });
+  }, []);
+
+  const menuItems: MenuItem[] = [
+    { id: "start", labelKey: "Start" },
+    { id: "stop", labelKey: "Stop" },
+    { id: "verify", labelKey: "Verify" },
+    { id: "reannounce", labelKey: "Reannounce" },
+    { id: null, labelKey: "" },
+    {
+      id: "priority",
+      labelKey: "Priority",
+      children: [
+        { id: "prio_high", labelKey: "High priority" },
+        { id: "prio_normal", labelKey: "Normal priority" },
+        { id: "prio_low", labelKey: "Low priority" },
+      ],
+    },
+    {
+      id: "queue",
+      labelKey: "Queue",
+      children: [
+        { id: "queue_top", labelKey: "Move top" },
+        { id: "queue_up", labelKey: "Move up" },
+        { id: "queue_down", labelKey: "Move down" },
+        { id: "queue_bottom", labelKey: "Move bottom" },
+      ],
+    },
+    { id: null, labelKey: "" },
+    { id: "copy_magnet", labelKey: "Copy Magnet Link(s)" },
+    { id: "copy_hash", labelKey: "Copy" },
+    { id: null, labelKey: "" },
+    { id: "labels", labelKey: "Labels" },
+    { id: "props", labelKey: "Properties" },
+    { id: null, labelKey: "" },
+    { id: "remove", labelKey: "Remove" },
+    { id: "remove_with_data", labelKey: "Remove and delete data", danger: true },
+  ];
+
+  const pickRowMenu = useCallback(
+    async (act: string) => {
+      setRowMenu(null);
+      // Priority is not a torrent action in the RPC spec: it is a field on
+      // torrent-set, the same one the properties dialog writes.
+      if (act === "prio_high" || act === "prio_normal" || act === "prio_low") {
+        const value = act === "prio_high" ? 1 : act === "prio_low" ? -1 : 0;
+        try {
+          await rpc.setTorrent([...selection], { bandwidthPriority: value });
+          await refresh();
+        } catch (e) {
+          setError(String(e));
+        }
+        return;
+      }
+      if (act === "copy_magnet") {
+        await copyMagnet();
+        return;
+      }
+      if (act === "copy_hash") {
+        const hashes = torrents.filter((x) => selection.has(x.id)).map((x) => x.hashString);
+        if (hashes.length > 0 && (await copyText(hashes.join("\n")))) setNotice(t("Copied"));
+        return;
+      }
+      if (act === "labels") {
+        setShowLabels(true);
+        return;
+      }
+      if (act === "props") {
+        setShowProps(true);
+        return;
+      }
+      await action(act);
+    },
+    [selection, torrents, action, copyMagnet, refresh, t],
   );
 
   /** Actions that apply to every torrent and need no selection. */
@@ -1059,6 +1143,15 @@ function AppInner() {
 
       {error && <div className="error">{error}</div>}
       {notice && <div className="notice">{notice}</div>}
+      {rowMenu && (
+        <ContextMenu
+          x={rowMenu.x}
+          y={rowMenu.y}
+          items={menuItems}
+          onPick={(id) => void pickRowMenu(id)}
+          onClose={() => setRowMenu(null)}
+        />
+      )}
 
       {viewOptions.toolbar && (
         <Toolbar
@@ -1113,6 +1206,7 @@ function AppInner() {
             speedAvg={displaySpeeds}
             onSort={onSort}
             onRowClick={onRowClick}
+            onRowContextMenu={openRowMenu}
             onToggleAll={toggleAll}
             onOpenDetails={openDetails}
           />

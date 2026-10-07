@@ -192,6 +192,53 @@ input.mono {
   font-size: calc(12px * var(--ui-scale));
 }
 
+/* ---- torrent list context menu ---- */
+.ctx-menu {
+  position: fixed;
+  z-index: 120;
+  padding: 4px;
+  background: #22262d;
+  border: 1px solid #363c46;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.ctx-head {
+  padding: 5px 9px 2px;
+  color: #8b93a1;
+  font-size: calc(11px * var(--ui-scale));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  padding: 5px 9px;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  color: #dfe3ea;
+  font: inherit;
+  font-size: calc(12px * var(--ui-scale));
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-item:hover {
+  background: #2f4a6b;
+}
+.ctx-item.ctx-sub {
+  padding-left: 20px;
+}
+.ctx-item.danger {
+  color: #f3c0c0;
+}
+.ctx-item.danger:hover {
+  background: #5a2b2b;
+}
+.ctx-sep {
+  margin: 4px 6px;
+  border-top: 1px solid #363c46;
+}
+
 /* ---- toolbar ---- */
 .toolbar {
   display: flex;

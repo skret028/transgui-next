@@ -29,6 +29,7 @@ interface Props {
   speedAvg?: Map<number, { down: number; up: number }> | null;
   onSort: (key: SortKey) => void;
   onRowClick: (id: number, e: MouseEvent) => void;
+  onRowContextMenu: (id: number, x: number, y: number) => void;
   onToggleAll: () => void;
   onOpenDetails: (id: number) => void;
 }
@@ -128,6 +129,7 @@ export function TorrentTable({
   speedAvg,
   onSort,
   onRowClick,
+  onRowContextMenu,
   onToggleAll,
   onOpenDetails,
 }: Props) {
@@ -180,6 +182,12 @@ export function TorrentTable({
               className={selection.has(row.id) ? "sel" : ""}
               onClick={(e) => onRowClick(row.id, e)}
               onDoubleClick={() => onOpenDetails(row.id)}
+              onContextMenu={(e) => {
+                // Keep the webview's own menu out of it; this rewrite provides
+                // the actions the original's context menu offered.
+                e.preventDefault();
+                onRowContextMenu(row.id, e.clientX, e.clientY);
+              }}
               title={row.error ? row.errorString : `${row.hashString}\n${row.downloadDir}`}
             >
               <td className="col-check">
