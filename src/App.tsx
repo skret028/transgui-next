@@ -14,6 +14,7 @@ import {
   loadColumns,
   loadConnForm,
   loadAutoReconnect,
+  loadDirHistory,
   loadHiddenRefresh,
   loadLocale,
   loadMinimizeToTray,
@@ -28,6 +29,7 @@ import {
   saveColumns,
   saveConnForm,
   saveAutoReconnect,
+  saveDirHistory,
   saveHiddenRefresh,
   saveLocale,
   saveMinimizeToTray,
@@ -81,6 +83,7 @@ import { ConnectionBar } from "./components/ConnectionBar";
 import { Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
 import { DetailsPanel } from "./components/DetailsPanel";
+import { pushDirHistory } from "./dirHistory";
 import { AddTorrentDialog } from "./components/AddTorrentDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
@@ -146,6 +149,10 @@ function AppInner() {
   const [trayAlwaysVisible, setTrayAlwaysVisible] = useState(true);
   /** Retry a dropped connection instead of waiting for a manual click. */
   const [autoReconnect, setAutoReconnect] = useState(true);
+  /** Recent download directories, newest first, for the Add dialog. */
+  const [dirHistory, setDirHistory] = useState<string[]>([]);
+  /** Guards the save effect so the initial empty state is never persisted. */
+  const dirHistoryLoaded = useRef(false);
   /** Where the reconnect loop currently is, for the status line. */
   const [reconnecting, setReconnecting] = useState(false);
 
@@ -306,6 +313,7 @@ function AppInner() {
       const savedSmoothSpeeds = await loadSmoothSpeeds();
       const savedTrayAlwaysVisible = await loadTrayAlwaysVisible();
       const savedAutoReconnect = await loadAutoReconnect();
+      const savedDirHistory = await loadDirHistory();
       if (cancelled) return;
       setForm(saved);
       setServers(savedServers);
@@ -324,6 +332,8 @@ function AppInner() {
       setTrayAlwaysVisible(savedTrayAlwaysVisible);
       void rpc.setTrayAlwaysVisible(savedTrayAlwaysVisible);
       setAutoReconnect(savedAutoReconnect);
+      setDirHistory(savedDirHistory);
+      dirHistoryLoaded.current = true;
       if (hasSaved) void connect(saved);
     })();
     return () => {
@@ -618,10 +628,23 @@ function AppInner() {
     setShowStats(true);
   }, []);
 
+  /** Remember where a torrent was put, for the Add dialog's next use. */
+  const rememberDir = useCallback((dir: string) => {
+    setDirHistory((prev) => pushDirHistory(prev, dir));
+  }, []);
+
+  // Persist the history whenever it changes. Guarded by the load flag so the
+  // empty initial state cannot overwrite a stored list before it is read.
+  useEffect(() => {
+    if (!dirHistoryLoaded.current) return;
+    void saveDirHistory(dirHistory);
+  }, [dirHistory]);
+
   const submitAdd = useCallback(
     async (options: AddTorrentOptions) => {
       try {
         await rpc.add(options);
+        if (options.download_dir) rememberDir(options.download_dir);
         setShowAdd(false);
         setClipboardLink("");
         await refresh();
@@ -629,7 +652,7 @@ function AppInner() {
         setError(String(e));
       }
     },
-    [refresh],
+    [refresh, rememberDir],
   );
 
   // Stable identity: the dialog reloads its form in an effect keyed on this
@@ -1310,6 +1333,7 @@ function AppInner() {
             setClipboardLink("");
           }}
           onSubmit={submitAdd}
+          dirHistory={dirHistory}
         />
       )}
 

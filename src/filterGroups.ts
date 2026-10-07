@@ -2,6 +2,7 @@
 // and the pane itself is just presentation.
 import type { Torrent } from "./types";
 import { STATUS_FILTERS, type FilterSelection } from "./torrentList";
+import { trackerHostOf } from "./trackerInfo";
 
 export interface FilterItem {
   /** Selection value for this row. */
@@ -14,7 +15,7 @@ export interface FilterItem {
 }
 
 export interface FilterGroup {
-  kind: "status" | "label" | "dir";
+  kind: "status" | "label" | "dir" | "tracker";
   labelKey: string;
   items: FilterItem[];
 }
@@ -45,6 +46,9 @@ export function buildGroups(list: Torrent[]): FilterGroup[] {
 
   const labels = tally(list.flatMap((t) => t.labels ?? []));
   const dirs = tally(list.map((t) => t.downloadDir).filter(Boolean));
+  // A torrent with no tracker yet (a magnet whose metadata has not arrived)
+  // has nowhere to file, so it simply does not appear in this group.
+  const trackers = tally(list.map(trackerHostOf).filter(Boolean));
 
   const toItems = (m: Map<string, number>): FilterItem[] =>
     [...m.entries()].sort(byCountThenName).map(([key, count]) => ({ key, label: key, count }));
@@ -53,6 +57,7 @@ export function buildGroups(list: Torrent[]): FilterGroup[] {
     { kind: "status", labelKey: "Status", items: status },
     { kind: "label", labelKey: "Labels", items: toItems(labels) },
     { kind: "dir", labelKey: "Download directory", items: toItems(dirs) },
+    { kind: "tracker", labelKey: "Tracker", items: toItems(trackers) },
   ];
 }
 

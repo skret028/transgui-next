@@ -1,6 +1,7 @@
 // Pure list logic for the torrent table: filtering and sorting.
 // Kept free of React so it stays trivially testable.
 import type { Torrent } from "./types";
+import { trackerHostOf } from "./trackerInfo";
 
 export type SortKey =
   | "name"
@@ -43,7 +44,7 @@ export interface FilterOptions {
  * `label`/`dir` compare against the torrent's own values.
  */
 export interface FilterSelection {
-  kind: "all" | "status" | "label" | "dir";
+  kind: "all" | "status" | "label" | "dir" | "tracker";
   value: string;
 }
 
@@ -66,6 +67,8 @@ export function matchesSelection(t: Torrent, sel: FilterSelection): boolean {
       return (t.labels ?? []).includes(sel.value);
     case "dir":
       return t.downloadDir === sel.value;
+    case "tracker":
+      return trackerHostOf(t) === sel.value;
   }
 }
 

@@ -366,3 +366,21 @@ export async function saveAutoReconnect(on: boolean): Promise<void> {
   await store.set(AUTO_RECONNECT_KEY, on);
   await store.save();
 }
+
+const DIR_HISTORY_KEY = "dirHistory";
+
+/** Recently used download directories, newest first. */
+export async function loadDirHistory(): Promise<string[]> {
+  try {
+    const store = await getStore();
+    return (await store.get<string[]>(DIR_HISTORY_KEY)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveDirHistory(list: string[]): Promise<void> {
+  const store = await getStore();
+  await store.set(DIR_HISTORY_KEY, list);
+  await store.save();
+}

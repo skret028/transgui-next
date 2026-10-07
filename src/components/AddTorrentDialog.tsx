@@ -11,6 +11,8 @@ interface Props {
   defaultPaused?: boolean;
   /** Pre-fill the magnet/URL field (e.g. a link found on the clipboard). */
   initialSource?: string;
+  /** Recently used download directories, newest first. */
+  dirHistory?: string[];
 }
 
 export function AddTorrentDialog({
@@ -18,6 +20,7 @@ export function AddTorrentDialog({
   onSubmit,
   defaultPaused = false,
   initialSource = "",
+  dirHistory = [],
 }: Props) {
   const t = useT();
   const [source, setSource] = useState(initialSource);
@@ -36,6 +39,17 @@ export function AddTorrentDialog({
       setFile(selected);
       setSource("");
     }
+  };
+
+  // The daemon's own filesystem is not ours, so this picks a path on the local
+  // machine and sends it as text; the daemon may or may not have it.
+  const pickDir = async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: t("Select a folder for download"),
+    });
+    if (typeof selected === "string") setDir(selected);
   };
 
   const canSubmit = source.trim().length > 0 || file.length > 0;
@@ -98,10 +112,25 @@ export function AddTorrentDialog({
         </div>
       </div>
 
-      <label className="field">
+      <div className="field">
         <span>{t("Download directory (blank = server default)")}</span>
-        <input value={dir} onChange={(e) => setDir(e.target.value)} placeholder="/downloads" />
-      </label>
+        <div className="row">
+          <input
+            value={dir}
+            onChange={(e) => setDir(e.target.value)}
+            placeholder="/downloads"
+            list="dir-history"
+          />
+          <datalist id="dir-history">
+            {dirHistory.map((d) => (
+              <option key={d} value={d} />
+            ))}
+          </datalist>
+          <button className="btn" onClick={pickDir}>
+            {t("Browse…")}
+          </button>
+        </div>
+      </div>
 
       <label className="field">
         <span>{t("Labels (comma separated)")}</span>

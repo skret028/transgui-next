@@ -37,3 +37,12 @@ export function priorityKey(bandwidthPriority: number): string {
   if (bandwidthPriority === -1) return "Low priority";
   return "Normal priority";
 }
+
+/**
+ * The tracker a torrent is grouped and filtered by: its first tracker's host,
+ * or "" when it has none (e.g. a magnet added before its metadata arrived).
+ */
+export function trackerHostOf(row: Torrent): string {
+  return row.trackerStats?.[0]?.host ?? "";
+}
+
