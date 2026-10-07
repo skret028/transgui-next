@@ -88,33 +88,15 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
     }
   };
 
-  if (!detail) {
-    return (
-      <section className="details empty-details">
-        <span className="muted">{t("Double-click a torrent to see details")}</span>
-      </section>
-    );
-  }
-
-  const files = detail.files ?? [];
-  const fileStats = detail.fileStats ?? [];
-  const peers = detail.peers ?? [];
-  const trackers = detail.trackerStats ?? [];
-
-  // Explicit, user-triggered reverse DNS. Sends the peer addresses to the local
-  // resolver, so it never runs on its own; the IP is kept when there is no PTR.
-  const resolveHostNames = async () => {
-    const ips = [...new Set(peers.map((p) => p.address).filter(Boolean))].sort();
-    if (ips.length === 0) return;
-    setResolving(true);
-    try {
-      setHostnames(await rpc.resolveHostNames(ips));
-    } catch {
-      // Best-effort: on failure the addresses stay as plain IPs.
-    } finally {
-      setResolving(false);
-    }
-  };
+  // Derived collections. These must be computed before the empty-state return
+  // below: every hook that follows has to run on every render, and skipping the
+  // ones further down while `detail` is null makes React throw "Rendered more
+  // hooks than during the previous render" the moment a torrent is first opened
+  // (which unmounts the whole app, there being no error boundary).
+  const files = detail?.files ?? [];
+  const fileStats = detail?.fileStats ?? [];
+  const peers = detail?.peers ?? [];
+  const trackers = detail?.trackerStats ?? [];
 
   // Countries come from the optional database; without it the column stays
   // empty rather than guessing. Keyed on the address set so the details refresh
@@ -143,6 +125,29 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
       cancelled = true;
     };
   }, [peerKey]);
+
+  if (!detail) {
+    return (
+      <section className="details empty-details">
+        <span className="muted">{t("Double-click a torrent to see details")}</span>
+      </section>
+    );
+  }
+
+  // Explicit, user-triggered reverse DNS. Sends the peer addresses to the local
+  // resolver, so it never runs on its own; the IP is kept when there is no PTR.
+  const resolveHostNames = async () => {
+    const ips = [...new Set(peers.map((p) => p.address).filter(Boolean))].sort();
+    if (ips.length === 0) return;
+    setResolving(true);
+    try {
+      setHostnames(await rpc.resolveHostNames(ips));
+    } catch {
+      // Best-effort: on failure the addresses stay as plain IPs.
+    } finally {
+      setResolving(false);
+    }
+  };
 
   const copyBtn = (what: string, text: string) => (
     <button
