@@ -73,15 +73,20 @@ picker; 29 UI languages.
 | Choose which files to download / per-file priority | `addtorrent`, `torrprops` file grid | **Done** — the files tab has a per-file picker (Don't download / Low / Normal / High) and Select all / Select none, driven by `files-wanted`, `files-unwanted` and `priority-*` |
 | Copy magnet link(s) | `Copy Magnet Link(s)` | **Done** — "More actions… → Copy Magnet Link(s)"; one magnet per selected torrent |
 | Connect through a proxy | `connoptions` (proxy server/port/user/password) | **Done** — optional proxy in the connection bar; HTTP proxy for both schemes, credentials attached out-of-band |
-| Alternative bandwidth on a schedule | `alt-speed-time-*` | **Open** — only the manual Alt speeds toggle exists |
+| Alternative bandwidth on a schedule | `alt-speed-time-*` | **Done** — enabled / begin / end / day bits in the settings dialog, alongside the manual Alt speeds toggle |
+| Sequential download | session `sequential-download` | **Done** — "Download pieces in order" |
+| Incomplete-files directory and `.part` renaming | `incomplete-dir*`, `rename-partial-files` | **Done** |
+| Disk cache, peer limits, queue sizes, blocklist, scripts, anti-brute-force | session settings | **Done** |
+| Port test | `Test port` button | **Backend only** — the `port-test` RPC command exists and works, but no UI reaches it |
 | Reconnect automatically when the connection drops | `Always auto-reconnect` | **Open** — a dropped connection stays dropped until the user reconnects |
 | Right-click context menu on the list | yes | **Open** — no `onContextMenu` anywhere |
-| About / help menu (about, home page, development site, license, donate) | `about.pas` | **Open** |
+| About / help menu (about, home page, development site, license, donate) | `about.pas` | **Open** — the only menu is the tray's show/hide/quit |
 | History of download/move directories | `folderhistory.pas` | **Open** |
 | Keyboard shortcuts beyond select-all | Ctrl+F9 options, Del to remove, … | **Partial** — `Cmd/Ctrl+A` and the global `Cmd/Ctrl+Shift+T` only |
-| Sequential download | session `sequential-download` | **Open** |
-| Native folder picker when adding a torrent | `Select a folder for download` | **Open** — the Add dialog takes a typed path |
-| Group the filter pane by tracker | `Tracker grouping` | **Open** — grouped by state, label and directory only |
+| Native folder picker when adding a torrent | `Select a folder for download` | **Open** — the Add dialog's picker selects a `.torrent` file; the download directory is typed |
+| Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Open** — grouped by status, label and directory only |
+| Columns: Seeds, Tracker, Tracker status, Completed on, Last active, Priority, Size to download, ID, Seeding time, Size left, Private, Uploaded | all in the column setup | **Open** — the picker offers 14 columns (name, status, size, progress, download, upload, ratio, remaining, labels, peer, added, downloaded, queue position, directory); these are absent |
+| IPv6 session toggle | `ipv6-enabled` | **Open** |
 
 ## Deliberate differences
 
