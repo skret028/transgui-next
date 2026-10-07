@@ -7,6 +7,7 @@ import { useT } from "../i18n";
 import {
   formatBytes,
   formatDate,
+  formatDuration,
   formatEta,
   formatPercent,
   formatRatio,
@@ -14,6 +15,7 @@ import {
   statusClass,
   statusKey,
 } from "../format";
+import { bestSwarm, priorityKey } from "../trackerInfo";
 
 interface Props {
   torrents: Torrent[];
@@ -86,6 +88,32 @@ function cell(
       return row.queuePosition >= 0 ? row.queuePosition : "-";
     case "dir":
       return row.downloadDir;
+    case "uploaded":
+      return formatBytes(row.uploadedEver);
+    case "sizeToDownload":
+      return formatBytes(row.sizeWhenDone);
+    case "sizeLeft":
+      return formatBytes(row.leftUntilDone);
+    case "completed":
+      return row.doneDate ? formatDate(row.doneDate) : "-";
+    case "active":
+      return row.activityDate ? formatDate(row.activityDate) : "-";
+    case "seedingTime":
+      return row.secondsSeeding ? formatDuration(row.secondsSeeding, t) : "-";
+    case "seeds": {
+      const seeds = bestSwarm(row).seeds;
+      return seeds >= 0 ? seeds : "-";
+    }
+    case "tracker":
+      return row.trackerStats?.[0]?.host || "-";
+    case "trackerStatus":
+      return row.trackerStats?.[0]?.lastAnnounceResult || "-";
+    case "priority":
+      return t(priorityKey(row.bandwidthPriority));
+    case "private":
+      return row.isPrivate ? "✓" : "";
+    case "rowId":
+      return row.id;
   }
 }
 

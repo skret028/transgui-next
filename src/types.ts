@@ -37,6 +37,10 @@ export interface Torrent {
   pieceSize: number;
   secondsDownloading: number;
   secondsSeeding: number;
+  /** Per-tracker swarm counts; the Seeds / Tracker / Tracker status columns. */
+  trackerStats?: TrackerStat[];
+  /** -1 low, 0 normal, 1 high. */
+  bandwidthPriority: number;
 }
 
 export interface TorrentFile {

@@ -17,8 +17,20 @@ export type ColumnId =
   | "peers"
   | "added"
   | "downloaded"
+  | "uploaded"
   | "queue"
-  | "dir";
+  | "dir"
+  | "seeds"
+  | "tracker"
+  | "trackerStatus"
+  | "completed"
+  | "active"
+  | "priority"
+  | "sizeToDownload"
+  | "sizeLeft"
+  | "seedingTime"
+  | "private"
+  | "rowId";
 
 export interface ColumnDef {
   id: ColumnId;
@@ -47,6 +59,21 @@ export const ALL_COLUMNS: ColumnDef[] = [
   { id: "downloaded", labelKey: "Downloaded", sortKey: "downloadedEver", num: true, defaultVisible: false },
   { id: "queue", labelKey: "Queue position", sortKey: "queuePosition", num: true, defaultVisible: false },
   { id: "dir", labelKey: "Download directory", defaultVisible: false },
+  // The rest of the original's column set. These have no sort key: the daemon
+  // reports the swarm counts only per tracker, so there is nothing meaningful to
+  // sort a whole row by.
+  { id: "uploaded", labelKey: "Uploaded", sortKey: "downloadedEver", num: true, defaultVisible: false },
+  { id: "sizeToDownload", labelKey: "Size to download", num: true, defaultVisible: false },
+  { id: "sizeLeft", labelKey: "Size left", num: true, defaultVisible: false },
+  { id: "completed", labelKey: "Completed on", defaultVisible: false },
+  { id: "active", labelKey: "Last active", defaultVisible: false },
+  { id: "seedingTime", labelKey: "Seeding time", num: true, defaultVisible: false },
+  { id: "seeds", labelKey: "Seeds", num: true, defaultVisible: false },
+  { id: "tracker", labelKey: "Tracker", defaultVisible: false },
+  { id: "trackerStatus", labelKey: "Tracker status", defaultVisible: false },
+  { id: "priority", labelKey: "Priority", defaultVisible: false },
+  { id: "private", labelKey: "Private", defaultVisible: false },
+  { id: "rowId", labelKey: "ID", num: true, defaultVisible: false },
 ];
 
 export const DEFAULT_COLUMNS: ColumnId[] = ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id);

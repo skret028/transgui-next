@@ -164,6 +164,8 @@ const TORRENT_FIELDS: &[&str] = &[
     "secondsDownloading",
     "secondsSeeding",
     "trackers",
+    "trackerStats",
+    "bandwidthPriority",
     "webseeds",
 ];
 
