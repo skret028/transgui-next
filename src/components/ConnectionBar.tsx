@@ -176,6 +176,46 @@ export function ConnectionBar({
           {t("Browse…")}
         </button>
       </label>
+      <label className="chk">
+        <input
+          type="checkbox"
+          checked={form.proxyEnabled}
+          onChange={(e) => onChange("proxyEnabled", e.target.checked)}
+          disabled={locked}
+        />
+        {t("Proxy server")}
+        <input
+          type="text"
+          placeholder="proxy.example.com"
+          value={form.proxyHost}
+          onChange={(e) => onChange("proxyHost", e.target.value)}
+          disabled={locked || !form.proxyEnabled}
+        />
+        <input
+          className="narrow"
+          type="text"
+          placeholder={t("Proxy port")}
+          value={form.proxyPort}
+          onChange={(e) => onChange("proxyPort", e.target.value)}
+          disabled={locked || !form.proxyEnabled}
+        />
+      </label>
+      <label className="chk">
+        <span className="muted">{t("Proxy user name")}</span>
+        <input
+          type="text"
+          value={form.proxyUsername}
+          onChange={(e) => onChange("proxyUsername", e.target.value)}
+          disabled={locked || !form.proxyEnabled}
+        />
+        <input
+          type="password"
+          placeholder={t("Proxy password")}
+          value={form.proxyPassword}
+          onChange={(e) => onChange("proxyPassword", e.target.value)}
+          disabled={locked || !form.proxyEnabled}
+        />
+      </label>
       {connected ? (
         <button className="btn danger" onClick={onDisconnect}>
           {t("Disconnect")}

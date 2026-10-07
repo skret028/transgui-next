@@ -14,3 +14,18 @@ export function extractTorrentLink(text: string): string | null {
   if (url && /\.torrent(\?|#|$)/i.test(url[0])) return url[0];
   return null;
 }
+
+/**
+ * Magnet URI for a torrent, from its info hash and display name.
+ *
+ * Only `xt` and `dn` go in: every client understands both, and the tracker list
+ * is not part of what a list row carries. Returns "" when there is no hash, so
+ * a caller skips the copy rather than putting a useless link on the clipboard.
+ */
+export function magnetLink(hashString: string, name: string): string {
+  const hash = hashString.trim().toLowerCase();
+  if (!hash) return "";
+  const params = [`xt=urn:btih:${hash}`];
+  if (name.trim()) params.push(`dn=${encodeURIComponent(name)}`);
+  return `magnet:?${params.join("&")}`;
+}

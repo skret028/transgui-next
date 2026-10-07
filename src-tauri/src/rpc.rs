@@ -34,6 +34,17 @@ pub struct ConnConfig {
     pub client_cert: Option<String>,
     #[serde(default)]
     pub client_key: Option<String>,
+    /// Optional HTTP proxy this client reaches the daemon through.
+    #[serde(default)]
+    pub proxy_enabled: Option<bool>,
+    #[serde(default)]
+    pub proxy_host: Option<String>,
+    #[serde(default)]
+    pub proxy_port: Option<u16>,
+    #[serde(default)]
+    pub proxy_username: Option<String>,
+    #[serde(default)]
+    pub proxy_password: Option<String>,
 }
 
 /// Some(path) unless the field is empty, so "unset" and "" behave the same.
@@ -71,6 +82,21 @@ fn build_client(config: &ConnConfig) -> Result<reqwest::Client, String> {
         }
         (None, None) => {}
         _ => return Err("客户端证书和私钥必须同时指定，或同时留空".into()),
+    }
+    // HTTP proxy. The daemon is reached through it, so it is configured for both
+    // schemes — an https daemon then goes through CONNECT. Credentials are
+    // attached separately rather than embedded in the URL, so a password
+    // containing '@', ':' or '/' cannot corrupt the proxy address.
+    if config.proxy_enabled.unwrap_or(false) {
+        let host = nonempty(&config.proxy_host).ok_or_else(|| "未指定代理服务器".to_string())?;
+        let port = config.proxy_port.unwrap_or(8080);
+        let mut proxy = reqwest::Proxy::all(format!("http://{host}:{port}"))
+            .map_err(|e| format!("代理地址无效：{e}"))?;
+        if let Some(user) = nonempty(&config.proxy_username) {
+            let password = config.proxy_password.clone().unwrap_or_default();
+            proxy = proxy.basic_auth(&user, &password);
+        }
+        builder = builder.proxy(proxy);
     }
     builder
         .build()
@@ -575,6 +601,155 @@ pub async fn rpc_add_torrent(
 mod tests {
     use super::*;
 
+    /// A connection with nothing optional set, so a test can vary one field.
+    fn base_config() -> ConnConfig {
+        ConnConfig {
+            host: "localhost".into(),
+            port: 9091,
+            path: Some("/transmission/rpc".into()),
+            username: None,
+            password: None,
+            https: None,
+            accept_invalid_certs: None,
+            client_cert: None,
+            client_key: None,
+            proxy_enabled: None,
+            proxy_host: None,
+            proxy_port: None,
+            proxy_username: None,
+            proxy_password: None,
+        }
+    }
+
+    /// The proxy is opt-in, and an enabled-but-empty proxy is a configuration
+    /// error rather than a silent fall-back to a direct connection — a user who
+    /// asked for a proxy must not get their traffic sent around it.
+    #[test]
+    fn build_client_only_proxies_when_asked_and_never_silently() {
+        let plain = base_config();
+        assert!(build_client(&plain).is_ok(), "no proxy configured still builds");
+
+        let missing_host = ConnConfig {
+            proxy_enabled: Some(true),
+            ..base_config()
+        };
+        assert!(build_client(&missing_host).is_err(), "enabled without a host must fail");
+
+        let blank_host = ConnConfig {
+            proxy_enabled: Some(true),
+            proxy_host: Some("   ".into()),
+            ..base_config()
+        };
+        assert!(build_client(&blank_host).is_err(), "a whitespace host is not a host");
+
+        // Port, user and password are all optional; a password full of URL
+        // punctuation must not be interpreted as part of the address.
+        let full = ConnConfig {
+            proxy_enabled: Some(true),
+            proxy_host: Some("proxy.example.com".into()),
+            proxy_port: Some(3128),
+            proxy_username: Some("user".into()),
+            proxy_password: Some("p@ss:w/rd".into()),
+            ..base_config()
+        };
+        assert!(build_client(&full).is_ok(), "a complete proxy builds");
+
+        let no_port = ConnConfig {
+            proxy_enabled: Some(true),
+            proxy_host: Some("proxy.example.com".into()),
+            ..base_config()
+        };
+        assert!(build_client(&no_port).is_ok(), "the port defaults when omitted");
+
+        let no_credentials = ConnConfig {
+            proxy_enabled: Some(true),
+            proxy_host: Some("proxy.example.com".into()),
+            proxy_username: None,
+            proxy_password: Some("ignored".into()),
+            ..base_config()
+        };
+        assert!(build_client(&no_credentials).is_ok(), "a password without a user is harmless");
+    }
+
+    /// The proxy path end to end.
+    ///
+    /// A forward proxy is stood up in-process and answers the RPC itself, while
+    /// the configured daemon address points at a dead port. The call can only
+    /// succeed if the request really went through the proxy — so this checks the
+    /// wiring in `build_client`, not merely that the config was accepted.
+    #[tokio::test]
+    async fn build_client_routes_traffic_through_the_proxy() {
+        use std::io::{Read, Write};
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind fake proxy");
+        let proxy_port = listener.local_addr().unwrap().port();
+        let marker = "via-proxy-9f3a";
+
+        // One request is all this proxy has to serve.
+        let server = std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().expect("accept");
+            let mut buf = [0u8; 4096];
+            let n = sock.read(&mut buf).unwrap_or(0);
+            let head = String::from_utf8_lossy(&buf[..n]).to_string();
+            let body = format!(r#"{{"result":"success","arguments":{{"version":"{marker}"}}}}"#);
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            sock.write_all(resp.as_bytes()).ok();
+            sock.flush().ok();
+            head
+        });
+
+        let config = ConnConfig {
+            // Port 9 (discard) has no listener here: a direct call cannot work.
+            host: "127.0.0.1".into(),
+            port: 9,
+            path: Some("/transmission/rpc".into()),
+            username: None,
+            password: None,
+            https: None,
+            accept_invalid_certs: None,
+            client_cert: None,
+            client_key: None,
+            proxy_enabled: Some(true),
+            proxy_host: Some("127.0.0.1".into()),
+            proxy_port: Some(proxy_port),
+            proxy_username: None,
+            proxy_password: None,
+        };
+
+        let state = AppState::new();
+        let client = build_client(&config).expect("client through the proxy");
+        {
+            let mut g = state.conn.lock().unwrap();
+            *g = Some(ConnState {
+                client,
+                base: "http://127.0.0.1:9/transmission/rpc".into(),
+                username: None,
+                password: None,
+                session_id: String::new(),
+            });
+        }
+
+        let got = rpc_call(&state, "session-get", json!({}))
+            .await
+            .expect("rpc through the proxy");
+        assert_eq!(
+            got["version"],
+            json!(marker),
+            "the answer did not come from the proxy"
+        );
+
+        let head = server.join().expect("proxy thread");
+        assert!(head.starts_with("POST "), "proxy saw no POST: {head:?}");
+        assert!(
+            head.contains("http://127.0.0.1:9/transmission/rpc"),
+            "proxy did not see an absolute-form request line: {head:?}"
+        );
+    }
+
     /// Exercise the mutual-TLS client against a server that REQUIRES a client
     /// certificate.
     ///
@@ -597,6 +772,11 @@ mod tests {
             accept_invalid_certs: Some(true),
             client_cert: Some(std::env::var("TRANSGUI_MTLS_CERT").expect("set TRANSGUI_MTLS_CERT")),
             client_key: Some(std::env::var("TRANSGUI_MTLS_KEY").expect("set TRANSGUI_MTLS_KEY")),
+            proxy_enabled: None,
+            proxy_host: None,
+            proxy_port: None,
+            proxy_username: None,
+            proxy_password: None,
         };
         let client = build_client(&config).expect("client with identity");
         let call = serde_json::json!({"method": "session-get"});

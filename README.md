@@ -8,8 +8,9 @@ The original is a 16-year-old Lazarus/Free Pascal application (`TMainForm` alone
 part that matters — the Transmission RPC client — and rebuilds the UI on a stack
 that is actually maintained.
 
-**Status: work in progress.** Milestones P0–P5 are done; cross-platform packaging
-is being wired up.
+**Status: work in progress.** Milestones P0–P13 are done; cross-platform packaging
+is wired up. [PARITY.md](PARITY.md) tracks what has been carried over from the
+original and what has not.
 
 ## Stack
 

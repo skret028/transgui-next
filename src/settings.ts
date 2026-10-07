@@ -17,6 +17,11 @@ export const DEFAULT_FORM: ConnForm = {
   acceptInvalid: false,
   clientCert: "",
   clientKey: "",
+  proxyEnabled: false,
+  proxyHost: "",
+  proxyPort: "",
+  proxyUsername: "",
+  proxyPassword: "",
 };
 
 let storePromise: Promise<Store> | null = null;

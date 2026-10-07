@@ -16,6 +16,8 @@ interface Props {
   onAction: (action: string) => void;
   onSelectAll: () => void;
   onSelectNone: () => void;
+  /** Copy a magnet URI for every selected torrent. */
+  onCopyMagnet: () => void;
   onGlobalAction: (action: string) => void;
   onOpenAdd: () => void;
   onOpenSettings: () => void;
@@ -81,6 +83,7 @@ export function Toolbar({
   onAction,
   onSelectAll,
   onSelectNone,
+  onCopyMagnet,
   onGlobalAction,
   onOpenAdd,
   onOpenSettings,
@@ -127,12 +130,14 @@ export function Toolbar({
           e.target.value = "";
           if (v === "select_all") onSelectAll();
           else if (v === "select_none") onSelectNone();
+          else if (v === "copy_magnet") onCopyMagnet();
           else if (v) onAction(v);
         }}
       >
         <option value="">{t("More actions")}…</option>
         <option value="select_all">{t("Select all")}</option>
         <option value="select_none">{t("Deselect all")}</option>
+        <option value="copy_magnet">{t("Copy Magnet Link(s)")}</option>
         <option value="start_now">{t("Force start")}</option>
         <option value="queue_top">{t("Move top")}</option>
         <option value="queue_up">{t("Move up")}</option>

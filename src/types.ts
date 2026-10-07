@@ -101,6 +101,12 @@ export interface ConnForm {
   /** PEM files for mutual TLS; empty means the daemon needs no client cert. */
   clientCert: string;
   clientKey: string;
+  /** Optional HTTP proxy this client reaches the daemon through. */
+  proxyEnabled: boolean;
+  proxyHost: string;
+  proxyPort: string;
+  proxyUsername: string;
+  proxyPassword: string;
 }
 
 /** A saved server/connection bookmark. */

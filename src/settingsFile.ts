@@ -29,7 +29,7 @@ export const SETTINGS_FILE_VERSION = 2;
 export const SETTINGS_FILE_APP = "transgui-next";
 
 /** The connection details we are willing to write out. */
-export type SafeForm = Omit<ConnForm, "password">;
+export type SafeForm = Omit<ConnForm, "password" | "proxyPassword">;
 
 export interface SafeServer {
   id: string;
@@ -156,6 +156,10 @@ function stripForm(form: Partial<ConnForm> | undefined, fallback: Partial<ConnFo
     acceptInvalid: !!f.acceptInvalid,
     clientCert: String(f.clientCert ?? ""),
     clientKey: String(f.clientKey ?? ""),
+    proxyEnabled: !!f.proxyEnabled,
+    proxyHost: str(f.proxyHost),
+    proxyPort: str(f.proxyPort),
+    proxyUsername: str(f.proxyUsername),
   };
 }
 
@@ -238,6 +242,10 @@ export function parseSettingsFile(text: string): ImportResult {
       acceptInvalid: false,
       clientCert: "",
       clientKey: "",
+      proxyEnabled: false,
+      proxyHost: "",
+      proxyPort: "",
+      proxyUsername: "",
     });
   }
   if (Array.isArray(objData.servers)) {
@@ -255,6 +263,10 @@ export function parseSettingsFile(text: string): ImportResult {
           acceptInvalid: false,
           clientCert: "",
           clientKey: "",
+          proxyEnabled: false,
+          proxyHost: "",
+          proxyPort: "",
+          proxyUsername: "",
         }),
       }));
   }

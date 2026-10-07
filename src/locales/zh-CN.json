@@ -525,6 +525,7 @@
   "New name": "新名称",
   "Tracker URL": "Tracker 地址",
   "Copied": "已复制",
+  "Could not copy to the clipboard": "无法复制到剪贴板",
   "Move data": "移动数据",
   "Destination": "目标目录",
   "Move the data on disk": "同时在磁盘上移动数据",

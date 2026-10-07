@@ -92,7 +92,8 @@ import { notify } from "./notify";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
-import { extractTorrentLink } from "./torrentLink";
+import { extractTorrentLink, magnetLink } from "./torrentLink";
+import { copyText } from "./clipboard";
 
 const REFRESH_MS = 2000;
 /** How often the opt-in clipboard watcher looks for a new torrent link. */
@@ -106,6 +107,8 @@ function AppInner() {
   const [connecting, setConnecting] = useState(false);
   const [version, setVersion] = useState("");
   const [error, setError] = useState("");
+  /** Transient green confirmation (e.g. "Copied"); cleared on a timer. */
+  const [notice, setNotice] = useState("");
   const [torrents, setTorrents] = useState<Torrent[]>([]);
 
   const [selection, setSelection] = useState<Set<number>>(new Set());
@@ -414,6 +417,28 @@ function AppInner() {
     },
     [refreshDetail],
   );
+
+  // Confirmation messages clear themselves; nothing else resets them.
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(""), 2500);
+    return () => window.clearTimeout(id);
+  }, [notice]);
+
+  /** Copy one magnet URI per selected torrent, newline separated. */
+  const copyMagnet = useCallback(async () => {
+    const links = torrents
+      .filter((x) => selection.has(x.id))
+      .map((x) => magnetLink(x.hashString, x.name))
+      .filter(Boolean);
+    if (links.length === 0) {
+      setError(t("Select a torrent in the list first"));
+      return;
+    }
+    setError("");
+    if (await copyText(links.join("\n"))) setNotice(t("Copied"));
+    else setError(t("Could not copy to the clipboard"));
+  }, [torrents, selection, t]);
 
   const action = useCallback(
     async (act: string) => {
@@ -763,9 +788,14 @@ function AppInner() {
     const s = parsed.settings;
 
     if (s.form) {
-      // The file carries no password: keep ours when it is the same server,
-      // otherwise the imported entry has to be filled in by hand.
-      const merged = { ...s.form, password: s.form.host === form.host ? form.password : "" };
+      // The file carries no secrets: keep ours when it is the same server (and
+      // the same proxy), otherwise the imported entry has to be filled in by
+      // hand.
+      const merged: ConnForm = {
+        ...s.form,
+        password: s.form.host === form.host ? form.password : "",
+        proxyPassword: s.form.proxyHost === form.proxyHost ? form.proxyPassword : "",
+      };
       const reconnects =
         merged.host !== form.host ||
         merged.port !== form.port ||
@@ -786,7 +816,12 @@ function AppInner() {
         return {
           id: sv.id || sv.form.host,
           name: sv.name || sv.form.host,
-          form: { ...sv.form, password: known?.form.password ?? "" },
+          form: {
+            ...sv.form,
+            password: known?.form.password ?? "",
+            proxyPassword:
+              known && known.form.proxyHost === sv.form.proxyHost ? known.form.proxyPassword : "",
+          },
         };
       });
       setServers(bookmarks);
@@ -1023,6 +1058,7 @@ function AppInner() {
       />
 
       {error && <div className="error">{error}</div>}
+      {notice && <div className="notice">{notice}</div>}
 
       {viewOptions.toolbar && (
         <Toolbar
@@ -1039,6 +1075,7 @@ function AppInner() {
           onAction={action}
           onSelectAll={selectAll}
           onSelectNone={selectNone}
+          onCopyMagnet={() => void copyMagnet()}
           onGlobalAction={globalAction}
           onOpenAdd={() => {
             setClipboardLink("");

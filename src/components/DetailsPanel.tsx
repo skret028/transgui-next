@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { FileStat, TorrentDetail } from "../types";
+import type { TorrentDetail } from "../types";
 import { useT } from "../i18n";
 import { rpc } from "../api";
 import { copyText } from "../clipboard";
-import type { TFn } from "../format";
+import { fileMode, filePatch, filePatchAll, type FileMode } from "../filePriority";
 import { formatBytes, formatDate, formatDuration, formatPercent, formatRatio, formatSpeed } from "../format";
 import { PromptDialog } from "./PromptDialog";
 import { MoveLocationDialog } from "./MoveLocationDialog";
@@ -49,14 +49,6 @@ const ANNOUNCE_KEY = [
   "tracker.state.active",
 ];
 
-function filePriority(stat: FileStat | undefined, t: TFn): string {
-  if (!stat) return "-";
-  if (!stat.wanted) return t("Skip");
-  if (stat.priority === 1) return t("High");
-  if (stat.priority === -1) return t("Low");
-  return t("Normal");
-}
-
 /** The trailing component of a torrent-relative path; that is what gets renamed. */
 const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
@@ -80,6 +72,8 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
   /** Reverse-DNS results, keyed by peer address. Filled only on request. */
   const [hostnames, setHostnames] = useState<Record<string, string>>({});
   const [resolving, setResolving] = useState(false);
+  /** True while a files-tab change is in flight, so the pickers stay locked. */
+  const [filesBusy, setFilesBusy] = useState(false);
 
   const doCopy = async (what: string, text: string) => {
     if (await copyText(text)) {
@@ -146,6 +140,19 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
       // Best-effort: on failure the addresses stay as plain IPs.
     } finally {
       setResolving(false);
+    }
+  };
+
+  /** Apply a torrent-set patch from the files tab, then re-read the detail. */
+  const setFiles = async (patch: Record<string, unknown>) => {
+    setFilesBusy(true);
+    try {
+      await rpc.setTorrent([detail.id], patch);
+      onRefresh();
+    } catch {
+      // Best-effort: the next poll shows whatever the daemon actually has.
+    } finally {
+      setFilesBusy(false);
     }
   };
 
@@ -299,53 +306,85 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
         )}
 
         {tab === "files" && (
-          <table className="sub-table">
-            <thead>
-              <tr>
-                <th>{t("File")}</th>
-                <th className="num">{t("Size")}</th>
-                <th className="col-prog">{t("Done")}</th>
-                <th>{t("Priority")}</th>
-                <th className="col-act" />
-              </tr>
-            </thead>
-            <tbody>
-              {files.length === 0 && (
+          <>
+            <div className="tab-actions">
+              <button
+                className="btn"
+                disabled={filesBusy || files.length === 0}
+                onClick={() => void setFiles(filePatchAll("normal", files.length))}
+              >
+                {t("Select all")}
+              </button>
+              <button
+                className="btn"
+                disabled={filesBusy || files.length === 0}
+                onClick={() => void setFiles(filePatchAll("skip", files.length))}
+              >
+                {t("Select none")}
+              </button>
+            </div>
+            <table className="sub-table">
+              <thead>
                 <tr>
-                  <td className="empty" colSpan={5}>
-                    {t("No file information")}
-                  </td>
+                  <th>{t("File")}</th>
+                  <th className="num">{t("Size")}</th>
+                  <th className="col-prog">{t("Done")}</th>
+                  <th>{t("Priority")}</th>
+                  <th className="col-act" />
                 </tr>
-              )}
-              {files.map((f, i) => {
-                const done = f.length > 0 ? f.bytesCompleted / f.length : 0;
-                return (
-                  <tr key={i}>
-                    <td className="ellipsis" title={f.name}>
-                      {f.name}
-                    </td>
-                    <td className="num">{formatBytes(f.length)}</td>
-                    <td className="col-prog">
-                      <div className="prog small">
-                        <div className="prog-fill" style={{ width: `${done * 100}%` }} />
-                        <span className="prog-text">{formatPercent(done)}</span>
-                      </div>
-                    </td>
-                    <td>{filePriority(fileStats[i], t)}</td>
-                    <td className="col-act">
-                      <button
-                        className="btn icon small"
-                        title={t("Rename")}
-                        onClick={() => setRenaming({ path: f.name, initial: basename(f.name) })}
-                      >
-                        ✎
-                      </button>
+              </thead>
+              <tbody>
+                {files.length === 0 && (
+                  <tr>
+                    <td className="empty" colSpan={5}>
+                      {t("No file information")}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                )}
+                {files.map((f, i) => {
+                  const done = f.length > 0 ? f.bytesCompleted / f.length : 0;
+                  return (
+                    <tr key={i}>
+                      <td className="ellipsis" title={f.name}>
+                        {f.name}
+                      </td>
+                      <td className="num">{formatBytes(f.length)}</td>
+                      <td className="col-prog">
+                        <div className="prog small">
+                          <div className="prog-fill" style={{ width: `${done * 100}%` }} />
+                          <span className="prog-text">{formatPercent(done)}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <select
+                          className="speed-select"
+                          value={fileMode(fileStats[i])}
+                          disabled={filesBusy}
+                          onChange={(e) =>
+                            void setFiles(filePatch(e.target.value as FileMode, i))
+                          }
+                        >
+                          <option value="skip">{t("Don't download")}</option>
+                          <option value="low">{t("Low priority")}</option>
+                          <option value="normal">{t("Normal priority")}</option>
+                          <option value="high">{t("High priority")}</option>
+                        </select>
+                      </td>
+                      <td className="col-act">
+                        <button
+                          className="btn icon small"
+                          title={t("Rename")}
+                          onClick={() => setRenaming({ path: f.name, initial: basename(f.name) })}
+                        >
+                          ✎
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
         )}
 
         {tab === "peers" && (

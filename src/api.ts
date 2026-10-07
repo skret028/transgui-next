@@ -26,6 +26,11 @@ export const rpc = {
         accept_invalid_certs: form.acceptInvalid,
         client_cert: form.clientCert,
         client_key: form.clientKey,
+        proxy_enabled: form.proxyEnabled,
+        proxy_host: form.proxyHost,
+        proxy_port: form.proxyPort ? Number(form.proxyPort) : null,
+        proxy_username: form.proxyUsername,
+        proxy_password: form.proxyPassword,
       },
     }),
 
