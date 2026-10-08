@@ -98,6 +98,12 @@ implemented.
 | Native folder picker when adding a torrent | `Select a folder for download` | **Done** — a Browse button opens the native directory picker; the path is sent as text (it is a path on this machine, not the daemon's) |
 | Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Done** — status, label, download directory and tracker |
 | Columns: Seeds, Tracker, Tracker status, Completed on, Last active, Priority, Size to download, ID, Seeding time, Size left, Private, Uploaded | all in the column setup | **Done** — the picker offers 26 columns |
+| Peer limit per torrent | `torrprops` "Peer limit" | **Open** — the properties dialog sets limits, ratio, queue and priority, but not `peer-limit` (only the session-wide `peer-limit-per-torrent` exists) |
+| Stop seeding a torrent when it goes inactive | `torrprops` "Stop seeding when inactive for" | **Open** — `seedIdleLimit` / `seedIdleMode` are never used |
+| Copy a file's path to the clipboard | `acCopyPath` (copies the focused file's full path, quoted) | **Open** — the files tab can rename a file but has no copy-path action |
+| Status bar, sizes mode | `acStatusBarSizes` (total size, size to download, downloaded, remaining for the selection) | **Open** — the status-bar field picker offers totals, counts and timestamps, but no sizes |
+| Adding a torrent that is already there | `torrent-duplicate` → add the new trackers to the existing torrent | **Open** — the duplicate response is ignored, so the trackers are silently not added and nothing says the torrent already existed |
+| Open a file with the OS | `acOpenFile` | **Open** — only "show in folder"; revealing the folder covers the practical need but does not launch the file |
 
 ## Deliberate differences
 
@@ -109,3 +115,20 @@ implemented.
   right-to-left locale.
 - **Passwords are never written to an exported settings file.** The proxy
   password follows the same rule as the daemon password.
+- **Old-server compatibility is not carried over.** The original writes
+  `pex-allowed` for RPC versions that predate `pex-enabled` and stores the
+  tracker list as `announce-list`; this rewrite targets a current Transmission,
+  which wants `pex-enabled` and `trackerList` / `trackers`.
+- **Hiding the menu bar** (`acMenuShow`) is not implemented. It is for
+  platforms where the menu belongs to the window; on macOS the menu bar is the
+  system's and the About/Help/Edit items have to stay reachable.
+- **Country flags are emoji** computed from the GeoIP country code rather than a
+  downloaded `flags.zip`, and country resolution happens whenever the GeoIP
+  database is present instead of behind a toggle.
+
+## Ahead of the original
+
+The session surface is a superset: the rewrite also exposes the settings a
+current Transmission has that the original predates — anti-brute-force limits,
+default trackers, per-event scripts (added / done / done-seeding),
+`start-added-torrents`, `trash-original-torrent-files` and sequential download.
