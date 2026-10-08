@@ -365,6 +365,12 @@ const DETAIL_FIELDS: &[&str] = &[
     "peersFrom",
     "trackers",
     "trackerStats",
+    // Per-torrent limits the properties dialog edits. `peer-limit` is
+    // hyphenated here where its neighbours are camelCase - that is the
+    // daemon's own naming, and getting it wrong reads as an empty field.
+    "peer-limit",
+    "seedIdleLimit",
+    "seedIdleMode",
 ];
 
 /// Fetch detailed records for the given torrent ids.

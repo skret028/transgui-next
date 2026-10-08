@@ -18,6 +18,9 @@ interface Fields {
   priority: string; // -1 low | 0 normal | 1 high
   ratioMode: string; // 0 global | 1 custom | 2 unlimited
   ratioLimit: string;
+  peerLimit: string;
+  idleMode: string; // 0 global | 1 use the limit | 2 unlimited
+  idleLimit: string;
   queuePos: string;
   honorsSession: boolean;
 }
@@ -33,6 +36,9 @@ function fromDetail(d: TorrentDetail): Fields {
     priority: numStr(d.bandwidthPriority ?? 0),
     ratioMode: numStr(d.seedRatioMode ?? 0),
     ratioLimit: numStr(d.seedRatioLimit),
+    peerLimit: numStr(d["peer-limit"]),
+    idleMode: numStr(d.seedIdleMode ?? 0),
+    idleLimit: numStr(d.seedIdleLimit),
     queuePos: numStr(d.queuePosition ?? 0),
     honorsSession: d.honorSessionLimits ?? true,
   };
@@ -51,6 +57,10 @@ function toPatch(f: Fields): Record<string, unknown> {
     bandwidthPriority: n(f.priority),
     seedRatioMode: n(f.ratioMode),
     seedRatioLimit: n(f.ratioLimit),
+    // Hyphenated: the daemon's field name, not a camelCase one.
+    "peer-limit": n(f.peerLimit),
+    seedIdleMode: n(f.idleMode),
+    seedIdleLimit: n(f.idleLimit),
     queuePosition: n(f.queuePos),
     honorsSessionLimits: f.honorsSession,
   };
@@ -192,6 +202,36 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
               value={fields.ratioLimit}
               onChange={(e) => set("ratioLimit", e.target.value)}
               disabled={fields.ratioMode !== "1"}
+            />
+          </label>
+
+          <div className="group">{t("Peers and seeding")}</div>
+          <label className="field">
+            <span>{t("Peer limit")}</span>
+            <input
+              className="narrow-wide"
+              value={fields.peerLimit}
+              onChange={(e) => set("peerLimit", e.target.value)}
+            />
+          </label>
+          <p className="muted">
+            {t("The most peers this torrent may connect to. 0 means none, not the server default.")}
+          </p>
+          <label className="field">
+            <span>{t("Stop seeding when inactive")}</span>
+            <select value={fields.idleMode} onChange={(e) => set("idleMode", e.target.value)}>
+              <option value="0">{t("Use global")}</option>
+              <option value="1">{t("Custom")}</option>
+              <option value="2">{t("Unlimited")}</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>{t("Idle limit (minutes)")}</span>
+            <input
+              className="narrow-wide"
+              value={fields.idleLimit}
+              onChange={(e) => set("idleLimit", e.target.value)}
+              disabled={fields.idleMode !== "1"}
             />
           </label>
         </div>

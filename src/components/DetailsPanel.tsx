@@ -17,6 +17,12 @@ interface Props {
    * null when it cannot be opened from here.
    */
   revealTarget: string | null;
+  /**
+   * Translate any daemon path to a local one, or null when nothing here can
+   * reach it. Used for the per-file copy/open, which need a path rather than
+   * just the download directory.
+   */
+  mapPath?: (path: string) => string | null;
   onClose: () => void;
   onRefresh: () => void;
 }
@@ -61,7 +67,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh }: Props) {
+export function DetailsPanel({ detail, loading, revealTarget, mapPath, onClose, onRefresh }: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("info");
   const [copied, setCopied] = useState("");
@@ -166,6 +172,20 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
       ⧉
     </button>
   );
+
+  /**
+   * A file's path as the daemon knows it, and the local path it maps to.
+   *
+   * Copy prefers the local one - that is the path worth pasting into a shell on
+   * this machine - and falls back to the daemon path when there is no mapping,
+   * the way the original copies what the daemon reports. Open is only offered
+   * when the file can actually be reached from here.
+   */
+  const filePathFor = (name: string) => {
+    const dir = (detail?.downloadDir ?? "").replace(/\/+$/, "");
+    const daemon = dir ? `${dir}/${name}` : name;
+    return { daemon, local: mapPath ? mapPath(daemon) : null };
+  };
 
   return (
     <section className="details">
@@ -343,6 +363,7 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
                 )}
                 {files.map((f, i) => {
                   const done = f.length > 0 ? f.bytesCompleted / f.length : 0;
+                  const path = filePathFor(f.name);
                   return (
                     <tr key={i}>
                       <td className="ellipsis" title={f.name}>
@@ -371,6 +392,17 @@ export function DetailsPanel({ detail, loading, revealTarget, onClose, onRefresh
                         </select>
                       </td>
                       <td className="col-act">
+                        {copyBtn(t("Copied"), path.local ?? path.daemon)}
+                        <button
+                          className="btn icon small"
+                          title={t("Open")}
+                          disabled={!path.local}
+                          onClick={() => {
+                            if (path.local) void rpc.openPath(path.local);
+                          }}
+                        >
+                          ↗
+                        </button>
                         <button
                           className="btn icon small"
                           title={t("Rename")}

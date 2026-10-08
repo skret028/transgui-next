@@ -214,6 +214,12 @@ function AppInner() {
     [detail, form.host, pathMap],
   );
 
+  /** The same mapping for an arbitrary path (the per-file copy/open buttons). */
+  const mapLocalPath = useCallback(
+    (path: string) => revealPathFor(path, form.host, pathMap),
+    [form.host, pathMap],
+  );
+
   const knownLabels = useMemo(() => {
     const set = new Set<string>();
     for (const x of torrents) for (const l of x.labels ?? []) set.add(l);
@@ -1373,6 +1379,7 @@ function AppInner() {
               detail={detail}
               loading={detailLoading}
               revealTarget={revealTarget}
+              mapPath={mapLocalPath}
               onClose={() => {
                 detailIdRef.current = null;
                 setDetail(null);

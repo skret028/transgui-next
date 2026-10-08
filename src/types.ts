@@ -91,6 +91,14 @@ export interface TorrentDetail extends Torrent {
   downloadLimited: boolean;
   seedRatioLimit: number;
   seedRatioMode: number;
+  /** The most peers this torrent may connect to; 0 means none.
+   *  Hyphenated, unlike the camelCase fields around it - that is what the
+   *  daemon reports and accepts. */
+  "peer-limit"?: number;
+  /** Seeding inactivity: 0 global, 1 use the limit below, 2 unlimited. */
+  seedIdleMode?: number;
+  /** Minutes of seeding inactivity before stopping, when the mode is 1. */
+  seedIdleLimit?: number;
   honorSessionLimits?: boolean;
 }
 

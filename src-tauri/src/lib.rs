@@ -148,6 +148,19 @@ fn rpc_reveal_path(app: AppHandle, path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Open a file with whatever the system associates with it.
+///
+/// Same reasoning as reveal: the local path is computed on the JS side from the
+/// path mapping, and the Rust call avoids needing a filesystem scope wide enough
+/// to cover any download directory.
+#[tauri::command]
+fn rpc_open_path(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(&path, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// Write text to a path the user picked (settings export).
 #[tauri::command]
 fn write_text_file(path: String, contents: String) -> Result<(), String> {
@@ -354,6 +367,7 @@ pub fn run() {
             set_close_to_tray,
             set_tray_always_visible,
             rpc_reveal_path,
+            rpc_open_path,
             write_text_file,
             read_text_file,
             geoip::geoip_status,
