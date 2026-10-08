@@ -64,7 +64,10 @@ ratio, queue position, labels, peer limit); label editing; global statistics;
 GeoIP country flags; reverse DNS for peers; port self-test; update check;
 settings export/import; clipboard watcher; tray icon, close-to-tray, global
 hotkey; smoothed transfer speeds; reduced polling while hidden; status-bar field
-picker; 29 UI languages.
+picker; the torrent list's right-click menu; automatic reconnect after the
+daemon drops; filter groups by status, label, directory and tracker; remembered
+download directories with a native directory picker; an application menu with a
+Help menu and About panel; 29 UI languages.
 
 ## Gaps
 
@@ -77,15 +80,15 @@ picker; 29 UI languages.
 | Sequential download | session `sequential-download` | **Done** — "Download pieces in order" |
 | Incomplete-files directory and `.part` renaming | `incomplete-dir*`, `rename-partial-files` | **Done** |
 | Disk cache, peer limits, queue sizes, blocklist, scripts, anti-brute-force | session settings | **Done** |
-| Port test | `Test port` button | **Backend only** — the `port-test` RPC command exists and works, but no UI reaches it |
-| Reconnect automatically when the connection drops | `Always auto-reconnect` | **Open** — a dropped connection stays dropped until the user reconnects |
-| Right-click context menu on the list | yes | **Open** — no `onContextMenu` anywhere |
-| About / help menu (about, home page, development site, license, donate) | `about.pas` | **Open** — the only menu is the tray's show/hide/quit |
-| History of download/move directories | `folderhistory.pas` | **Open** |
-| Keyboard shortcuts beyond select-all | Ctrl+F9 options, Del to remove, … | **Partial** — `Cmd/Ctrl+A` and the global `Cmd/Ctrl+Shift+T` only |
-| Native folder picker when adding a torrent | `Select a folder for download` | **Open** — the Add dialog's picker selects a `.torrent` file; the download directory is typed |
-| Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Open** — grouped by status, label and directory only |
-| Columns: Seeds, Tracker, Tracker status, Completed on, Last active, Priority, Size to download, ID, Seeding time, Size left, Private, Uploaded | all in the column setup | **Open** — the picker offers 14 columns (name, status, size, progress, download, upload, ratio, remaining, labels, peer, added, downloaded, queue position, directory); these are absent |
+| Port test | `Test port` button | **Done** — Settings → "测试端口", which reaches `port-test` and shows open / not open |
+| Reconnect automatically when the connection drops | `Always auto-reconnect` | **Done** — on by default, persisted, in the settings export; a failed poll starts a retry with a growing delay (1s doubling to 30s) |
+| Right-click context menu on the list | yes | **Done** — start / stop / verify / reannounce, priority, queue moves, copy magnet, copy hash, labels, properties, remove, remove-with-data |
+| About / help menu (about, home page, development site, license, donate) | `about.pas` | **Partial** — a native Help menu with home page and development site plus a native About panel; license and donate entries are not there |
+| History of download/move directories | `folderhistory.pas` | **Done** — the Add dialog's directory field offers the last 10 (newest first, de-duplicated); kept beside the settings file, not in the exported settings |
+| Keyboard shortcuts beyond select-all | Ctrl+F9 options, Del to remove, … | **Partial** — `Cmd/Ctrl+A` and the global `Cmd/Ctrl+Shift+T` only, plus the standard Edit menu items |
+| Native folder picker when adding a torrent | `Select a folder for download` | **Done** — a Browse button opens the native directory picker; the path is sent as text (it is a path on this machine, not the daemon's) |
+| Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Done** — status, label, download directory and tracker |
+| Columns: Seeds, Tracker, Tracker status, Completed on, Last active, Priority, Size to download, ID, Seeding time, Size left, Private, Uploaded | all in the column setup | **Done** — the picker offers 26 columns |
 | IPv6 session toggle | `ipv6-enabled` | **Open** |
 
 ## Deliberate differences
