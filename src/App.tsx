@@ -84,6 +84,7 @@ import { Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { pushDirHistory } from "./dirHistory";
+import { resolveShortcut } from "./shortcuts";
 import { AddTorrentDialog } from "./components/AddTorrentDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
@@ -449,23 +450,6 @@ function AppInner() {
 
   const selectNone = useCallback(() => setSelection(new Set()), []);
 
-  // Cmd/Ctrl+A selects every visible torrent, mirroring the header checkbox.
-  // It is skipped while typing in a field so the browser's own select-all still
-  // works inside the filter box, dialog inputs, etc.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "a") return;
-      const el = e.target as HTMLElement | null;
-      const tag = el?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
-      if (!connected || visible.length === 0) return;
-      e.preventDefault();
-      selectAll();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [connected, visible, selectAll]);
-
   const openDetails = useCallback(
     (id: number) => {
       detailIdRef.current = id;
@@ -523,6 +507,25 @@ function AppInner() {
     [selection, refresh, refreshDetail, t],
   );
 
+  /**
+   * Set the bandwidth priority of the selection. Priority is not a torrent
+   * action in the RPC spec - it is a field on torrent-set, the same one the
+   * properties dialog writes - so it gets a helper the menu and the shortcuts
+   * both call.
+   */
+  const setPriority = useCallback(
+    async (value: number) => {
+      if (selection.size === 0) return;
+      try {
+        await rpc.setTorrent([...selection], { bandwidthPriority: value });
+        await refresh();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [selection, refresh],
+  );
+
   // A right-click on a row that is not already selected makes it the selection,
   // so the menu acts on the torrent that was pointed at rather than on whatever
   // happened to be selected before.
@@ -570,16 +573,8 @@ function AppInner() {
   const pickRowMenu = useCallback(
     async (act: string) => {
       setRowMenu(null);
-      // Priority is not a torrent action in the RPC spec: it is a field on
-      // torrent-set, the same one the properties dialog writes.
       if (act === "prio_high" || act === "prio_normal" || act === "prio_low") {
-        const value = act === "prio_high" ? 1 : act === "prio_low" ? -1 : 0;
-        try {
-          await rpc.setTorrent([...selection], { bandwidthPriority: value });
-          await refresh();
-        } catch (e) {
-          setError(String(e));
-        }
+        await setPriority(act === "prio_high" ? 1 : act === "prio_low" ? -1 : 0);
         return;
       }
       if (act === "copy_magnet") {
@@ -601,7 +596,7 @@ function AppInner() {
       }
       await action(act);
     },
-    [selection, torrents, action, copyMagnet, refresh, t],
+    [selection, torrents, action, copyMagnet, refresh, setPriority, t],
   );
 
   /** Actions that apply to every torrent and need no selection. */
@@ -814,6 +809,63 @@ function AppInner() {
     setViewOptions(value);
     void saveViewOptions(value);
   }, []);
+
+  // Keyboard shortcuts. The table itself lives in shortcuts.ts, where it can be
+  // tested without a browser; this only dispatches what it returns.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      const typing =
+        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable === true;
+      const hit = resolveShortcut(e, {
+        typing,
+        connected,
+        hasVisible: visible.length > 0,
+        hasSelection: selection.size > 0,
+      });
+      if (!hit) return;
+      e.preventDefault();
+      switch (hit.kind) {
+        case "select-all":
+          selectAll();
+          break;
+        case "settings":
+          setShowSettings(true);
+          break;
+        case "big-toolbar":
+          changeViewOptions({ ...viewOptions, bigToolbar: !viewOptions.bigToolbar });
+          break;
+        case "remove":
+          void action(hit.withData ? "remove_with_data" : "remove");
+          break;
+        case "action":
+          void action(hit.value);
+          break;
+        case "priority":
+          void setPriority(hit.value);
+          break;
+        case "alt-speed":
+          void toggleAltSpeed();
+          break;
+        case "add-torrent":
+          setShowAdd(true);
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    action,
+    changeViewOptions,
+    connected,
+    selectAll,
+    selection,
+    setPriority,
+    toggleAltSpeed,
+    viewOptions,
+    visible,
+  ]);
 
   const changeClipboardAuto = useCallback((on: boolean) => {
     setClipboardAuto(on);
@@ -1072,6 +1124,34 @@ function AppInner() {
     })();
     return () => unlisten?.();
   }, [connected, addFromOs]);
+
+  // Help -> Check for new version. The settings dialog runs its own check and
+  // shows the result inline; from the menu the result has to land somewhere
+  // visible, so it goes to the notice line.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        unlisten = await listen("menu://check-updates", () => {
+          void (async () => {
+            try {
+              const info = await rpc.checkForUpdates();
+              setNotice(
+                info.newer
+                  ? t("A newer version is available: {version}", { version: info.latest })
+                  : `${t("You are up to date")} · ${info.current}`,
+              );
+            } catch (e) {
+              setError(String(e));
+            }
+          })();
+        });
+      } catch {
+        // not running under Tauri
+      }
+    })();
+    return () => unlisten?.();
+  }, [t]);
 
   // Tell the user once per torrent that finishes downloading.
   useEffect(() => {

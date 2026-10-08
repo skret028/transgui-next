@@ -67,7 +67,16 @@ hotkey; smoothed transfer speeds; reduced polling while hidden; status-bar field
 picker; the torrent list's right-click menu; automatic reconnect after the
 daemon drops; filter groups by status, label, directory and tracker; remembered
 download directories with a native directory picker; an application menu with a
-Help menu and About panel; 29 UI languages.
+Help menu and About panel; the original's keyboard shortcuts; 29 UI languages.
+
+## Not a gap: IPv6
+
+An earlier revision of this file listed an `ipv6-enabled` session toggle as
+missing. It is not: the original has no such option (no `ipv6` string anywhere
+in its source), and Transmission 4.1.3 has no such session field either - it
+accepts unknown keys on `session-set` but never reports one back, and
+`session-get` returns no `ipv6-enabled`. The row was removed rather than
+implemented.
 
 ## Gaps
 
@@ -83,13 +92,12 @@ Help menu and About panel; 29 UI languages.
 | Port test | `Test port` button | **Done** — Settings → "测试端口", which reaches `port-test` and shows open / not open |
 | Reconnect automatically when the connection drops | `Always auto-reconnect` | **Done** — on by default, persisted, in the settings export; a failed poll starts a retry with a growing delay (1s doubling to 30s) |
 | Right-click context menu on the list | yes | **Done** — start / stop / verify / reannounce, priority, queue moves, copy magnet, copy hash, labels, properties, remove, remove-with-data |
-| About / help menu (about, home page, development site, license, donate) | `about.pas` | **Partial** — a native Help menu with home page and development site plus a native About panel; license and donate entries are not there |
+| About / help menu | `about.pas` | **Done** — a native Help menu with check for new version, home page, development site and About, plus an About panel in the app menu where macOS expects it |
 | History of download/move directories | `folderhistory.pas` | **Done** — the Add dialog's directory field offers the last 10 (newest first, de-duplicated); kept beside the settings file, not in the exported settings |
-| Keyboard shortcuts beyond select-all | Ctrl+F9 options, Del to remove, … | **Partial** — `Cmd/Ctrl+A` and the global `Cmd/Ctrl+Shift+T` only, plus the standard Edit menu items |
+| Keyboard shortcuts beyond select-all | Ctrl+F9 options, Del to remove, … | **Done** — the original's bindings: F3/F4 start/stop, F8 alternative speeds, Del remove, Alt/Cmd+Del remove with data, Ins add torrent, Ctrl+H/N/L priority, Ctrl+R reannounce, F9 settings, Ctrl+F12 big toolbar, Ctrl+A select all (`src/shortcuts.ts`, with the table under test) |
 | Native folder picker when adding a torrent | `Select a folder for download` | **Done** — a Browse button opens the native directory picker; the path is sent as text (it is a path on this machine, not the daemon's) |
 | Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Done** — status, label, download directory and tracker |
 | Columns: Seeds, Tracker, Tracker status, Completed on, Last active, Priority, Size to download, ID, Seeding time, Size left, Private, Uploaded | all in the column setup | **Done** — the picker offers 26 columns |
-| IPv6 session toggle | `ipv6-enabled` | **Open** |
 
 ## Deliberate differences
 

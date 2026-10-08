@@ -12,7 +12,7 @@ use tauri::menu::{
     SubmenuBuilder,
 };
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 
 /// Set to true when the user really wants to exit (tray menu), so the close
 /// button can hide-to-tray instead of quitting.
@@ -233,18 +233,22 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 /// Help carries what the original's did - a link to the project's home page
 /// and to the original it is a rewrite of - plus a native About panel.
 fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let about = AboutMetadataBuilder::new()
-        .name(Some("transgui-next"))
-        .version(Some(env!("CARGO_PKG_VERSION")))
-        .comments(Some("Remote control for the Transmission BitTorrent daemon"))
-        .website(Some("https://github.com/skret028/transgui-next"))
-        .build();
+    // Built twice on purpose: the app menu keeps About where macOS expects to
+    // find it, and Help carries one too, which is where the original puts it.
+    let about_meta = || {
+        AboutMetadataBuilder::new()
+            .name(Some("transgui-next"))
+            .version(Some(env!("CARGO_PKG_VERSION")))
+            .comments(Some("Remote control for the Transmission BitTorrent daemon"))
+            .website(Some("https://github.com/skret028/transgui-next"))
+            .build()
+    };
 
     let app_menu = SubmenuBuilder::new(app, "transgui-next")
         .item(&PredefinedMenuItem::about(
             app,
             Some("关于 transgui-next"),
-            Some(about),
+            Some(about_meta()),
         )?)
         .separator()
         .item(&PredefinedMenuItem::services(app, Some("服务"))?)
@@ -273,9 +277,18 @@ fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .item(&PredefinedMenuItem::close_window(app, Some("关闭窗口"))?)
         .build()?;
 
+    // The original's Help menu: check for a new version, home page, the
+    // development site, then About.
     let help_menu = SubmenuBuilder::new(app, "帮助")
-        .item(&MenuItemBuilder::with_id("help_home", "主页").build(app)?)
+        .item(&MenuItemBuilder::with_id("help_check_updates", "检查新版本").build(app)?)
+        .item(&MenuItemBuilder::with_id("help_home", "访问主页").build(app)?)
         .item(&MenuItemBuilder::with_id("help_dev", "开发网站").build(app)?)
+        .separator()
+        .item(&PredefinedMenuItem::about(
+            app,
+            Some("关于 transgui-next"),
+            Some(about_meta()),
+        )?)
         .build()?;
 
     MenuBuilder::new(app)
@@ -354,6 +367,11 @@ pub fn run() {
         .on_menu_event(|app, event| {
             use tauri_plugin_opener::OpenerExt;
             match event.id().as_ref() {
+                "help_check_updates" => {
+                    // The window owns the update check (it needs the notice
+                    // line to show the result), so the menu only asks for it.
+                    let _ = app.emit("menu://check-updates", ());
+                }
                 "help_home" => {
                     let _ = app.opener().open_url(
                         "https://github.com/transmission-remote-gui/transgui",
