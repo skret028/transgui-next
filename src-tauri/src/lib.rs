@@ -7,7 +7,10 @@ mod update;
 
 use rpc::AppState;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{
+    AboutMetadataBuilder, Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem,
+    SubmenuBuilder,
+};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
 
@@ -222,6 +225,64 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// The application menu.
+///
+/// Setting a custom menu replaces Tauri's default, so the standard Edit items
+/// have to be built back in: without them a WKWebView loses cut/copy/paste in
+/// every text field, which is a worse regression than a missing Help menu.
+/// Help carries what the original's did - a link to the project's home page
+/// and to the original it is a rewrite of - plus a native About panel.
+fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let about = AboutMetadataBuilder::new()
+        .name(Some("transgui-next"))
+        .version(Some(env!("CARGO_PKG_VERSION")))
+        .comments(Some("Remote control for the Transmission BitTorrent daemon"))
+        .website(Some("https://github.com/skret028/transgui-next"))
+        .build();
+
+    let app_menu = SubmenuBuilder::new(app, "transgui-next")
+        .item(&PredefinedMenuItem::about(
+            app,
+            Some("关于 transgui-next"),
+            Some(about),
+        )?)
+        .separator()
+        .item(&PredefinedMenuItem::services(app, Some("服务"))?)
+        .separator()
+        .item(&PredefinedMenuItem::hide(app, Some("隐藏 transgui-next"))?)
+        .item(&PredefinedMenuItem::hide_others(app, Some("隐藏其他"))?)
+        .item(&PredefinedMenuItem::show_all(app, Some("显示全部"))?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(app, Some("退出 transgui-next"))?)
+        .build()?;
+
+    let edit_menu = SubmenuBuilder::new(app, "编辑")
+        .item(&PredefinedMenuItem::undo(app, Some("撤销"))?)
+        .item(&PredefinedMenuItem::redo(app, Some("重做"))?)
+        .separator()
+        .item(&PredefinedMenuItem::cut(app, Some("剪切"))?)
+        .item(&PredefinedMenuItem::copy(app, Some("复制"))?)
+        .item(&PredefinedMenuItem::paste(app, Some("粘贴"))?)
+        .item(&PredefinedMenuItem::select_all(app, Some("全选"))?)
+        .build()?;
+
+    let window_menu = SubmenuBuilder::new(app, "窗口")
+        .item(&PredefinedMenuItem::minimize(app, Some("最小化"))?)
+        .item(&PredefinedMenuItem::maximize(app, Some("缩放"))?)
+        .separator()
+        .item(&PredefinedMenuItem::close_window(app, Some("关闭窗口"))?)
+        .build()?;
+
+    let help_menu = SubmenuBuilder::new(app, "帮助")
+        .item(&MenuItemBuilder::with_id("help_home", "主页").build(app)?)
+        .item(&MenuItemBuilder::with_id("help_dev", "开发网站").build(app)?)
+        .build()?;
+
+    MenuBuilder::new(app)
+        .items(&[&app_menu, &edit_menu, &window_menu, &help_menu])
+        .build()
+}
+
 /// Cmd/Ctrl+Shift+T toggles the main window.
 fn register_global_shortcut(app: &AppHandle) -> Result<(), String> {
     use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
@@ -289,6 +350,24 @@ pub fn run() {
             resolve::resolve_host_names,
             update::check_for_updates,
         ])
+        .menu(build_app_menu)
+        .on_menu_event(|app, event| {
+            use tauri_plugin_opener::OpenerExt;
+            match event.id().as_ref() {
+                "help_home" => {
+                    let _ = app.opener().open_url(
+                        "https://github.com/transmission-remote-gui/transgui",
+                        None::<&str>,
+                    );
+                }
+                "help_dev" => {
+                    let _ = app
+                        .opener()
+                        .open_url("https://github.com/skret028/transgui-next", None::<&str>);
+                }
+                _ => {}
+            }
+        })
         .setup(|app| {
             app.manage(geoip::GeoIp::default());
             let handle = app.handle().clone();
