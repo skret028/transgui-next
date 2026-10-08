@@ -29,3 +29,33 @@ export function magnetLink(hashString: string, name: string): string {
   if (name.trim()) params.push(`dn=${encodeURIComponent(name)}`);
   return `magnet:?${params.join("&")}`;
 }
+
+/** decodeURIComponent throws on malformed input; one bad tracker is not fatal. */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * The trackers named in a magnet URI, in order, with duplicates dropped.
+ *
+ * `tr` is URL-encoded and may repeat. Only used when the daemon reports that a
+ * torrent is already present: merging these into the torrent that is already
+ * there is the one thing that can still come of a repeat add, which is what the
+ * original offers in that spot.
+ */
+export function trackersFromMagnet(link: string): string[] {
+  const text = link.trim();
+  if (!/^magnet:\?/i.test(text)) return [];
+  const found: string[] = [];
+  for (const part of text.slice(8).split("&")) {
+    const eq = part.indexOf("=");
+    if (eq < 0 || part.slice(0, eq).trim().toLowerCase() !== "tr") continue;
+    const value = safeDecode(part.slice(eq + 1).trim()).trim();
+    if (value && !found.includes(value)) found.push(value);
+  }
+  return found;
+}

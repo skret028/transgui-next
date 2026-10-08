@@ -7,7 +7,7 @@
  * is missing `dn` or carries a stray character produces a link that looks right
  * but does not resolve for the receiving client.
  */
-import { extractTorrentLink, magnetLink } from "../src/torrentLink.ts";
+import { extractTorrentLink, magnetLink, trackersFromMagnet } from "../src/torrentLink.ts";
 
 let passed = 0;
 const failures: string[] = [];
@@ -78,6 +78,41 @@ eq(
 const built = magnetLink(HASH, "x");
 eq(built.startsWith("magnet:?xt=urn:btih:"), true, "the built link starts with the xt field");
 eq(built.includes(" "), false, "the built link contains no raw spaces");
+
+// --- trackersFromMagnet -----------------------------------------------------
+eq(
+  trackersFromMagnet(`magnet:?xt=urn:btih:${HASH}&tr=${encodeURIComponent("http://a.example:80/announce")}`),
+  ["http://a.example:80/announce"],
+  "a single tr is decoded",
+);
+eq(
+  trackersFromMagnet("magnet:?tr=udp%3A%2F%2Fb.example%3A6969&tr=http%3A%2F%2Fa.example"),
+  ["udp://b.example:6969", "http://a.example"],
+  "several tr values keep their order and both schemes survive",
+);
+eq(
+  trackersFromMagnet("magnet:?tr=http%3A%2F%2Fa.example&tr=http%3A%2F%2Fa.example"),
+  ["http://a.example"],
+  "a repeated tracker is only offered once",
+);
+eq(trackersFromMagnet("magnet:?xt=urn:btih:abc"), [], "no tr means nothing to merge");
+eq(trackersFromMagnet("magnet:?dn=x&TR=http%3A%2F%2Fa.example"), ["http://a.example"], "tr is matched case-insensitively");
+eq(trackersFromMagnet("magnet:?tr="), [], "an empty tr is skipped");
+eq(trackersFromMagnet("magnet:?tr"), [], "a tr with no = is skipped");
+eq(
+  trackersFromMagnet("magnet:?tr=http%3A%2F%2Fa.example%2F%zz&dn=x"),
+  ["http%3A%2F%2Fa.example%2F%zz"],
+  "a tracker that cannot be decoded is kept as it arrived, not dropped",
+);
+eq(trackersFromMagnet(`magnet:?tr=%20${encodeURIComponent("http://a.example")}%20`), ["http://a.example"], "padding is trimmed, before and after decoding");
+eq(trackersFromMagnet("https://example.com/x.torrent"), [], "a plain URL names no trackers");
+eq(trackersFromMagnet(""), [], "no link means nothing to merge");
+eq(trackersFromMagnet("  "), [], "a blank link means nothing to merge");
+eq(
+  trackersFromMagnet("magnet:?dn=a& tr=http%3A%2F%2Fa.example"),
+  ["http://a.example"],
+  "whitespace around a field name does not stop it",
+);
 
 if (failures.length > 0) {
   console.error(`FAILED ${failures.length} of ${passed + failures.length}:`);

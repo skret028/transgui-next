@@ -84,6 +84,8 @@ export interface TorrentDetail extends Torrent {
   fileStats?: FileStat[];
   peers?: Peer[];
   trackerStats?: TrackerStat[];
+  /** The torrent's tracker tiers, as `torrent-get` reports them. */
+  trackers?: { announce: string; id?: number; tier?: number }[];
   bandwidthPriority: number;
   uploadLimit: number;
   downloadLimit: number;

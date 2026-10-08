@@ -167,6 +167,8 @@ export interface StatusBarFields {
   updated: boolean;
   hint: boolean;
   doubleClick: boolean;
+  /** Sizes of the selected (or shown) torrents, as the original's sizes mode. */
+  sizes: boolean;
 }
 
 export const DEFAULT_STATUS_FIELDS: StatusBarFields = {
@@ -176,6 +178,7 @@ export const DEFAULT_STATUS_FIELDS: StatusBarFields = {
   updated: true,
   hint: true,
   doubleClick: true,
+  sizes: false,
 };
 
 const STATUS_FIELDS_KEY = "statusBarFields";

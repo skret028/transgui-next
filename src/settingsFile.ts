@@ -74,6 +74,7 @@ export const DEFAULT_STATUS_BAR_FIELDS: StatusBarFields = {
   updated: true,
   hint: true,
   doubleClick: true,
+  sizes: false,
 };
 export const DEFAULT_HIDDEN_REFRESH: HiddenRefresh = { enabled: false, seconds: 10 };
 export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
@@ -120,6 +121,7 @@ function sanitizeStatusBarFields(value: unknown): StatusBarFields {
     updated: bool(v.updated, d.updated),
     hint: bool(v.hint, d.hint),
     doubleClick: bool(v.doubleClick, d.doubleClick),
+    sizes: bool(v.sizes, d.sizes),
   };
 }
 

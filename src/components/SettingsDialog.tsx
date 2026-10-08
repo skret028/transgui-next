@@ -882,6 +882,7 @@ export function SettingsDialog({
                 ["updated", "Last updated"],
                 ["hint", "Hints"],
                 ["doubleClick", "Double-click hint"],
+                ["sizes", "Status bar - Sizes"],
               ] as [keyof StatusBarFields, string][]
             ).map(([key, label]) => (
               <label className="chk" key={key}>

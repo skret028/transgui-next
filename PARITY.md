@@ -98,12 +98,12 @@ implemented.
 | Native folder picker when adding a torrent | `Select a folder for download` | **Done** — a Browse button opens the native directory picker; the path is sent as text (it is a path on this machine, not the daemon's) |
 | Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Done** — status, label, download directory and tracker |
 | Columns: Seeds, Tracker, Tracker status, Completed on, Last active, Priority, Size to download, ID, Seeding time, Size left, Private, Uploaded | all in the column setup | **Done** — the picker offers 26 columns |
-| Peer limit per torrent | `torrprops` "Peer limit" | **Open** — the properties dialog sets limits, ratio, queue and priority, but not `peer-limit` (only the session-wide `peer-limit-per-torrent` exists) |
-| Stop seeding a torrent when it goes inactive | `torrprops` "Stop seeding when inactive for" | **Open** — `seedIdleLimit` / `seedIdleMode` are never used |
-| Copy a file's path to the clipboard | `acCopyPath` (copies the focused file's full path, quoted) | **Open** — the files tab can rename a file but has no copy-path action |
-| Status bar, sizes mode | `acStatusBarSizes` (total size, size to download, downloaded, remaining for the selection) | **Open** — the status-bar field picker offers totals, counts and timestamps, but no sizes |
-| Adding a torrent that is already there | `torrent-duplicate` → add the new trackers to the existing torrent | **Open** — the duplicate response is ignored, so the trackers are silently not added and nothing says the torrent already existed |
-| Open a file with the OS | `acOpenFile` | **Open** — only "show in folder"; revealing the folder covers the practical need but does not launch the file |
+| Peer limit per torrent | `torrprops` "Peer limit" | **Done** — the properties dialog edits `peer-limit`; verified against the daemon (50 → 7 and restored). It is a literal count: 0 means none, not "use the session setting" |
+| Stop seeding a torrent when it goes inactive | `torrprops` "Stop seeding when inactive for" | **Done** — the inactivity limit and its mode, with the minutes field enabled only in the custom mode; verified writing mode 1 / 45 minutes and restoring 0 / 30 |
+| Copy a file's path to the clipboard | `acCopyPath` (copies the focused file's full path) | **Done** — a copy button on every file row. It copies the mapped local path when the mapping reaches one and the daemon's own path otherwise; the original copies the daemon's |
+| Status bar, sizes mode | `acStatusBarSizes` (total size, size to download, downloaded, remaining for the selection) | **Done** — "Status bar fields → Status bar - Sizes": the four sizes, summed over the selection or over what is shown, from the size fields so the parts add up |
+| Adding a torrent that is already there | `torrent-duplicate` → offer to merge the link's trackers into the existing torrent | **Done** — a repeat add says so, selects the torrent that was already there, and, when the link named trackers the torrent does not have, asks before merging them. Verified: a magnet carrying an extra tracker added exactly that tracker. A *local .torrent* duplicate has nothing to merge, because its announce list is never read on this side |
+| Open a file with the OS | `acOpenFile` | **Done** — an open button beside copy-path, offered only when the file is reachable from this machine; verified launching the associated application with the file |
 
 ## Deliberate differences
 

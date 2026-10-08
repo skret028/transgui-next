@@ -84,6 +84,7 @@ import { Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { pushDirHistory } from "./dirHistory";
+import { formatBytes } from "./format";
 import { resolveShortcut } from "./shortcuts";
 import { AddTorrentDialog } from "./components/AddTorrentDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -99,7 +100,7 @@ import { notify } from "./notify";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
-import { extractTorrentLink, magnetLink } from "./torrentLink";
+import { extractTorrentLink, magnetLink, trackersFromMagnet } from "./torrentLink";
 import { copyText } from "./clipboard";
 
 const REFRESH_MS = 2000;
@@ -219,6 +220,25 @@ function AppInner() {
     (path: string) => revealPathFor(path, form.host, pathMap),
     [form.host, pathMap],
   );
+
+  /**
+   * Sizes for the status bar's sizes line: over the selection, or over what is
+   * shown when nothing is selected - the scope the original uses. Summed from
+   * the size fields rather than from percentages, so downloaded + remaining
+   * adds up to size to download exactly.
+   */
+  const sizeSummary = useMemo(() => {
+    const scope = selection.size > 0 ? torrents.filter((x) => selection.has(x.id)) : visible;
+    let total = 0;
+    let toDownload = 0;
+    let left = 0;
+    for (const x of scope) {
+      total += x.totalSize ?? 0;
+      toDownload += x.sizeWhenDone ?? 0;
+      left += x.leftUntilDone ?? 0;
+    }
+    return { total, toDownload, downloaded: toDownload - left, left };
+  }, [selection, torrents, visible]);
 
   const knownLabels = useMemo(() => {
     const set = new Set<string>();
@@ -641,19 +661,69 @@ function AppInner() {
     void saveDirHistory(dirHistory);
   }, [dirHistory]);
 
-  const submitAdd = useCallback(
-    async (options: AddTorrentOptions) => {
+  /**
+   * The id the daemon reported for a repeat add, if the torrent was already
+   * there. torrent-add answers with torrent-duplicate - still result: success -
+   * instead of torrent-added in that case.
+   */
+  const duplicateIdOf = useCallback((res: unknown): number | null => {
+    const d = (res as { "torrent-duplicate"?: { id?: unknown } } | null)?.["torrent-duplicate"];
+    return typeof d?.id === "number" ? d.id : null;
+  }, []);
+
+  /**
+   * A repeat add is not a failure, but it is not nothing either: the user asked
+   * for a torrent to be added and no new one appeared. Say so, select the one
+   * that was already there, and - when the link named trackers the torrent does
+   * not have yet - offer to merge them in, which is what the original asks in
+   * this spot and the only thing that can still come of the add.
+   *
+   * The trackers the torrent already has are dropped before the merge, so
+   * asking yes can never add a duplicate tier.
+   */
+  const announceDuplicate = useCallback(
+    async (id: number | null, link = "") => {
+      if (id == null) return;
+      setSelection(new Set([id]));
+      setNotice(t("Torrent already exists in the list"));
+      const wanted = trackersFromMagnet(link);
+      if (wanted.length === 0) return;
+      const name = torrents.find((x) => x.id === id)?.name ?? "";
+      const ok = await ask(
+        `${t("Torrent already exists in the list")}${name ? `: ${name}` : ""}.` +
+          `\n\n${t("Update trackers for the existing torrent?")}`,
+        { kind: "info" },
+      );
+      if (!ok) return;
       try {
-        await rpc.add(options);
-        if (options.download_dir) rememberDir(options.download_dir);
-        setShowAdd(false);
-        setClipboardLink("");
-        await refresh();
+        const [detail] = await rpc.details([id]);
+        const have = new Set((detail?.trackers ?? []).map((x) => x.announce));
+        const fresh = wanted.filter((x) => !have.has(x));
+        if (fresh.length > 0) {
+          await rpc.setTorrent([id], { trackerAdd: fresh });
+          setNotice(t("Copied"));
+        }
       } catch (e) {
         setError(String(e));
       }
     },
-    [refresh, rememberDir],
+    [t, torrents],
+  );
+
+  const submitAdd = useCallback(
+    async (options: AddTorrentOptions) => {
+      try {
+        const res = await rpc.add(options);
+        if (options.download_dir) rememberDir(options.download_dir);
+        setShowAdd(false);
+        setClipboardLink("");
+        await refresh();
+        await announceDuplicate(duplicateIdOf(res), options.filename ?? "");
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [refresh, rememberDir, announceDuplicate, duplicateIdOf],
   );
 
   // Stable identity: the dialog reloads its form in an effect keyed on this
@@ -753,14 +823,16 @@ function AppInner() {
               return;
             }
             void (async () => {
+              let dup: number | null = null;
               for (const path of torrents) {
                 try {
-                  await rpc.add({ local_torrent_path: path });
+                  dup = duplicateIdOf(await rpc.add({ local_torrent_path: path })) ?? dup;
                 } catch (e) {
                   setError(String(e));
                 }
               }
               await refresh();
+              await announceDuplicate(dup);
             })();
           } else {
             setDragging(false);
@@ -1400,6 +1472,14 @@ function AppInner() {
           )}
           {statusFields.selected && selection.size > 0 && (
             <span>{t("{n} selected", { n: selection.size })}</span>
+          )}
+          {statusFields.sizes && (
+            <span>
+              {t("Total size")}: {formatBytes(sizeSummary.total)} · {t("Size to download")}:{" "}
+              {formatBytes(sizeSummary.toDownload)} · {t("Downloaded")}:{" "}
+              {formatBytes(sizeSummary.downloaded)} · {t("Remaining")}:{" "}
+              {formatBytes(sizeSummary.left)}
+            </span>
           )}
           {statusFields.doubleClick && (
             <span className="muted">{t("Double-click a torrent to open details")}</span>
