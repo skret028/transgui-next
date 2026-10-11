@@ -13,14 +13,23 @@ export type Shortcut =
   | { kind: "big-toolbar" }
   /** Remove the selection, optionally destroying the data with it. */
   | { kind: "remove"; withData: boolean }
-  /** An RPC action on the selection: start, stop, reannounce. */
+  /** An RPC action on the selection: start, stop, reannounce, queue moves, the
+   *  "all torrents" pair, force start. */
   | { kind: "action"; value: string }
   /** Bandwidth priority of the selection. */
   | { kind: "priority"; value: number }
   /** Toggle the alternative speed limits. */
   | { kind: "alt-speed" }
   /** Open the Add torrent dialog. */
-  | { kind: "add-torrent" };
+  | { kind: "add-torrent" }
+  /** Open the properties dialog for the selection. */
+  | { kind: "properties" }
+  /** Open the labels editor for the selection. */
+  | { kind: "labels" }
+  /** Show the selection's download folder in the file manager. */
+  | { kind: "reveal" }
+  /** Mark every file of the selection as "don't download". */
+  | { kind: "set-not-download" };
 
 export interface KeyLike {
   key: string;
@@ -55,6 +64,14 @@ export function resolveShortcut(e: KeyLike, ctx: ShortcutContext): Shortcut | nu
   if (key === "F9") return { kind: "settings" };
   if (mod && key === "F12") return { kind: "big-toolbar" };
 
+  // The "all torrents" pair is window-level like the two above - it needs no
+  // selection - and the original binds it to Ctrl+F3 / Ctrl+F4. Only Ctrl is
+  // claimed: macOS reserves Cmd+F3 and Cmd+F4.
+  if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    if (key === "F3") return { kind: "action", value: "start_all" };
+    if (key === "F4") return { kind: "action", value: "stop_all" };
+  }
+
   if (ctx.typing) return null;
 
   // Select all: outside a text field only, so the browser's own select-all
@@ -66,24 +83,41 @@ export function resolveShortcut(e: KeyLike, ctx: ShortcutContext): Shortcut | nu
 
   if (!ctx.connected) return null;
 
-  // Delete removes; Delete with Alt (Cmd on macOS) also destroys the data. It
-  // is the one irreversible shortcut, so it is not the unmodified one.
+  // Delete removes; Delete with Alt (Cmd on macOS) or Shift also destroys the
+  // data. It is the one irreversible shortcut, so it is not the unmodified one.
   if (key === "Delete") {
     if (!ctx.hasSelection) return null;
-    return { kind: "remove", withData: e.altKey || e.metaKey };
+    return { kind: "remove", withData: e.altKey || e.metaKey || e.shiftKey };
   }
 
   // The rest all act on the selection.
   if (!ctx.hasSelection) return null;
 
-  // Bare function keys: a modifier makes them something else (Ctrl+F9 is
-  // handled above; Cmd+F4 is not ours to claim).
+  // Alt+Enter is the original's Properties binding.
+  if (e.altKey && !mod && key === "Enter") return { kind: "properties" };
+
+  // Cmd/Ctrl + PgUp/PgDn move within the queue; Shift takes it to the ends.
+  if (mod && !e.altKey && (key === "PageUp" || key === "PageDown")) {
+    const up = key === "PageUp";
+    const far = e.shiftKey;
+    const value = up ? (far ? "queue_top" : "queue_up") : far ? "queue_bottom" : "queue_down";
+    return { kind: "action", value };
+  }
+
+  // Cmd/Ctrl+Enter reveals the download folder, as the original does.
+  if (mod && !e.altKey && !e.shiftKey && key === "Enter") return { kind: "reveal" };
+
+  // Function keys with no modifier, plus Shift+F3: the original's force start
+  // (start now, ignoring the queue). The Ctrl+F3/F4 "all torrents" pair is
+  // claimed further up; Cmd+F3/F4 are left alone.
   if (!mod && !e.altKey) {
     switch (key) {
       case "F3":
-        return { kind: "action", value: "start" };
+        return { kind: "action", value: e.shiftKey ? "start_now" : "start" };
       case "F4":
         return { kind: "action", value: "stop" };
+      case "F7":
+        return { kind: "labels" };
       case "F8":
         return { kind: "alt-speed" };
       case "Insert":
@@ -101,6 +135,10 @@ export function resolveShortcut(e: KeyLike, ctx: ShortcutContext): Shortcut | nu
         return { kind: "priority", value: -1 };
       case "r":
         return { kind: "action", value: "reannounce" };
+      case "i":
+        // The original's Ctrl+I: the keyboard form of the files tab's "Don't
+        // download", applied to every file of the selection.
+        return { kind: "set-not-download" };
     }
   }
 

@@ -84,6 +84,7 @@ import { Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { pushDirHistory } from "./dirHistory";
+import { filePatchAll } from "./filePriority";
 import { formatBytes } from "./format";
 import { resolveShortcut } from "./shortcuts";
 import { AddTorrentDialog } from "./components/AddTorrentDialog";
@@ -916,6 +917,51 @@ function AppInner() {
     void saveViewOptions(value);
   }, []);
 
+  /**
+   * Show the selection's download folders. The original's "Open containing
+   * folder" acts on the focused row; here the whole selection goes, capped so a
+   * select-all cannot open one window per torrent.
+   */
+  const revealSelection = useCallback(async () => {
+    const dirs = new Set<string>();
+    for (const x of torrents) {
+      if (!selection.has(x.id)) continue;
+      const local = mapLocalPath(x.downloadDir ?? "");
+      if (local) dirs.add(local);
+    }
+    if (dirs.size === 0) {
+      setNotice(t("Set a path mapping to open the daemon's folders from this machine"));
+      return;
+    }
+    for (const dir of [...dirs].slice(0, 5)) {
+      try {
+        await rpc.revealPath(dir);
+      } catch (e) {
+        setError(String(e));
+      }
+    }
+  }, [mapLocalPath, selection, t, torrents]);
+
+  /**
+   * The original's "Don't download" for a torrent: every file in it is marked
+   * unwanted - the same patch the files tab sends for a single row.
+   */
+  const setNotDownload = useCallback(async () => {
+    const ids = [...selection];
+    if (ids.length === 0) return;
+    try {
+      const details = await rpc.details(ids);
+      for (const d of details) {
+        const count = d.files?.length ?? 0;
+        if (count === 0) continue;
+        await rpc.setTorrent([d.id], filePatchAll("skip", count));
+      }
+      setNotice(t("Don't download"));
+    } catch (e) {
+      setError(String(e));
+    }
+  }, [selection, t]);
+
   // Keyboard shortcuts. The table itself lives in shortcuts.ts, where it can be
   // tested without a browser; this only dispatches what it returns.
   useEffect(() => {
@@ -957,6 +1003,18 @@ function AppInner() {
         case "add-torrent":
           setShowAdd(true);
           break;
+        case "properties":
+          setShowProps(true);
+          break;
+        case "labels":
+          setShowLabels(true);
+          break;
+        case "reveal":
+          void revealSelection();
+          break;
+        case "set-not-download":
+          void setNotDownload();
+          break;
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -965,8 +1023,10 @@ function AppInner() {
     action,
     changeViewOptions,
     connected,
+    revealSelection,
     selectAll,
     selection,
+    setNotDownload,
     setPriority,
     toggleAltSpeed,
     viewOptions,

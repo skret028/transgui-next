@@ -107,7 +107,13 @@ eq(
 );
 
 // Modifiers that mean something else must not fire the plain binding.
-eq(resolveShortcut(key("F3", { ctrlKey: true }), list), null, "Ctrl+F3 is not F3");
+// Ctrl+F3 / Ctrl+F4 are the "all torrents" pair now, asserted below; a bare F3
+// stays a start of the selection.
+eq(
+  resolveShortcut(key("F1"), list),
+  null,
+  "an unbound function key does nothing",
+);
 eq(resolveShortcut(key("F8", { altKey: true }), list), null, "Alt+F8 is not F8");
 eq(resolveShortcut(key("h", { ctrlKey: true, shiftKey: true }), list), null, "Ctrl+Shift+H is not ours");
 eq(resolveShortcut(key("a", { ctrlKey: true, shiftKey: true }), list), null, "Ctrl+Shift+A is not select-all");
@@ -119,7 +125,101 @@ eq(resolveShortcut(key("x"), list), null, "a bare letter is not a shortcut");
 eq(resolveShortcut(key("Backspace"), list), null, "Backspace is not Delete");
 eq(resolveShortcut(key("r", { ctrlKey: true, shiftKey: true }), list), null, "Ctrl+Shift+R is not reannounce");
 
+// --- the added bindings, from the original's own table -----------------------
+eq(
+  resolveShortcut(key("F3", { shiftKey: true }), list),
+  { kind: "action", value: "start_now" },
+  "Shift+F3 is force start",
+);
+eq(resolveShortcut(key("F7"), list), { kind: "labels" }, "F7 opens the labels editor");
+eq(
+  resolveShortcut(key("F3", { ctrlKey: true }), list),
+  { kind: "action", value: "start_all" },
+  "Ctrl+F3 starts everything",
+);
+eq(
+  resolveShortcut(key("F4", { ctrlKey: true }), list),
+  { kind: "action", value: "stop_all" },
+  "Ctrl+F4 stops everything",
+);
+eq(
+  resolveShortcut(key("F3", { ctrlKey: true }), ctx({ hasSelection: false })),
+  { kind: "action", value: "start_all" },
+  "start-all needs no selection",
+);
+eq(
+  resolveShortcut(key("F3", { ctrlKey: true }), ctx({ typing: true })),
+  { kind: "action", value: "start_all" },
+  "start-all works while a field has focus",
+);
+eq(
+  resolveShortcut(key("F3", { metaKey: true }), list),
+  null,
+  "Cmd+F3 is not claimed - macOS reserves it",
+);
+eq(
+  resolveShortcut(key("F4", { metaKey: true }), list),
+  null,
+  "Cmd+F4 is not claimed either",
+);
+eq(
+  resolveShortcut(key("PageUp", { ctrlKey: true }), list),
+  { kind: "action", value: "queue_up" },
+  "Ctrl+PgUp moves up the queue",
+);
+eq(
+  resolveShortcut(key("PageDown", { metaKey: true }), list),
+  { kind: "action", value: "queue_down" },
+  "Cmd+PgDn moves down the queue",
+);
+eq(
+  resolveShortcut(key("PageUp", { ctrlKey: true, shiftKey: true }), list),
+  { kind: "action", value: "queue_top" },
+  "Ctrl+Shift+PgUp moves to the top",
+);
+eq(
+  resolveShortcut(key("PageDown", { ctrlKey: true, shiftKey: true }), list),
+  { kind: "action", value: "queue_bottom" },
+  "Ctrl+Shift+PgDn moves to the bottom",
+);
+eq(
+  resolveShortcut(key("PageUp", { ctrlKey: true }), ctx({ hasSelection: false })),
+  null,
+  "a queue move needs a selection",
+);
+eq(
+  resolveShortcut(key("Enter", { altKey: true }), list),
+  { kind: "properties" },
+  "Alt+Enter opens properties",
+);
+eq(
+  resolveShortcut(key("Enter", { metaKey: true }), list),
+  { kind: "reveal" },
+  "Cmd+Enter shows the download folder",
+);
+eq(
+  resolveShortcut(key("Enter", { ctrlKey: true, shiftKey: true }), list),
+  null,
+  "Ctrl+Shift+Enter is not a binding",
+);
+eq(
+  resolveShortcut(key("i", { ctrlKey: true }), list),
+  { kind: "set-not-download" },
+  "Ctrl+I marks the selection as don't download",
+);
+eq(
+  resolveShortcut(key("Delete", { shiftKey: true }), list),
+  { kind: "remove", withData: true },
+  "Shift+Delete removes with data, as the original binds it",
+);
+eq(
+  resolveShortcut(key("Enter", { altKey: true }), ctx({ hasSelection: false })),
+  null,
+  "properties needs a selection",
+);
+
 console.log(`shortcuts: ${passed} assertions passed`);
+
 if (failures.length > 0) {
   console.error(`FAILED ${failures.length} of ${passed + failures.length}:`);
   for (const f of failures) console.error("  - " + f);
