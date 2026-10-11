@@ -81,6 +81,8 @@ export interface TrackerStat {
 
 export interface TorrentDetail extends Torrent {
   files?: TorrentFile[];
+  /** 1.0 once the metadata has arrived; below that for a fresh magnet. */
+  metadataPercentComplete?: number;
   fileStats?: FileStat[];
   peers?: Peer[];
   trackerStats?: TrackerStat[];
@@ -133,6 +135,22 @@ export interface ServerBookmark {
 export interface ConnectResult {
   version: string;
   rpcVersion: number;
+}
+
+/** What the daemon reports back about a torrent the Add dialog has just handed
+ *  to it, while the user is still choosing which of its files to take. */
+export interface PreparedAdd {
+  id: number;
+  /** The daemon's own name for it; "Save as" starts from this. */
+  name: string;
+  /** The peer limit in force - for a fresh torrent, the session default. */
+  peerLimit: number;
+  files: TorrentFile[];
+  /** False for a magnet whose metadata has not arrived yet: there is no file
+   *  list to show, and the original hides the contents group in that case. */
+  hasMetadata: boolean;
+  /** Where the daemon put it, for the free-space line. */
+  downloadDir: string;
 }
 
 export interface AddTorrentOptions {

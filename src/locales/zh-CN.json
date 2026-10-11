@@ -636,5 +636,10 @@
   "Deselect all": "全不选",
   "Smooth transfer speeds": "平滑传输速度",
   "Show the recent average of the download and upload rate in the list, to smooth out spikes.": "在列表中显示最近几次采样的平均下载/上传速度，平滑掉跳动。",
-  "Hide the tray icon while the main window is visible; it is restored when the window is hidden. macOS may not honour this.": "主窗口可见时隐藏托盘图标，窗口隐藏后自动恢复。macOS 上可能不生效。"
+  "Hide the tray icon while the main window is visible; it is restored when the window is hidden. macOS may not honour this.": "主窗口可见时隐藏托盘图标，窗口隐藏后自动恢复。macOS 上可能不生效。",
+  "Contents": "内容",
+  "Free space": "可用空间",
+  "Start after adding": "加入后开始",
+  "The file list appears once the metadata has arrived.": "元数据到达后才会显示文件列表。",
+  "The daemon did not accept the torrent": "daemon 没有接受这个种子"
 }

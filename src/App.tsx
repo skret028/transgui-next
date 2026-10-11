@@ -70,6 +70,7 @@ import type {
   SessionInfo,
   Torrent,
   TorrentDetail,
+  PreparedAdd,
 } from "./types";
 import {
   availableLocales,
@@ -87,7 +88,7 @@ import { pushDirHistory } from "./dirHistory";
 import { filePatchAll } from "./filePriority";
 import { formatBytes } from "./format";
 import { resolveShortcut } from "./shortcuts";
-import { AddTorrentDialog } from "./components/AddTorrentDialog";
+import { AddTorrentDialog, type AddChoices } from "./components/AddTorrentDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
 import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
@@ -730,24 +731,93 @@ function AppInner() {
     [t, torrents],
   );
 
-  const submitAdd = useCallback(
-    async (options: AddTorrentOptions) => {
+  /**
+   * Hand a torrent to the daemon, paused, and report back what it made of it.
+   *
+   * The original's Add dialog works this way round: the torrent goes over
+   * first, the daemon answers with its own name and file list, and only then
+   * does the dialog ask which files to take. Keeping the hand-over here means a
+   * repeat add still goes through the same announcement as any other add.
+   */
+  const prepareAdd = useCallback(
+    async (options: AddTorrentOptions): Promise<PreparedAdd | null> => {
       try {
-        const res = await rpc.add(options);
+        const res = await rpc.add({ ...options, paused: true });
         if (options.download_dir) rememberDir(options.download_dir);
+        const duplicate = duplicateIdOf(res);
+        if (duplicate != null) {
+          setShowAdd(false);
+          setClipboardLink("");
+          await refresh();
+          await announceDuplicate(
+            duplicate,
+            options.filename ?? "",
+            options.local_torrent_path ?? "",
+          );
+          return null;
+        }
+        const added = (res as { "torrent-added"?: { id?: unknown } } | null)?.["torrent-added"];
+        const id = typeof added?.id === "number" ? added.id : null;
+        if (id == null) throw new Error(t("The daemon did not accept the torrent"));
+        const [detail] = await rpc.details([id]);
+        if (!detail) throw new Error(t("The daemon did not accept the torrent"));
+        const files = detail.files ?? [];
+        return {
+          id,
+          name: detail.name,
+          peerLimit: Number(detail["peer-limit"] ?? 0),
+          files,
+          // A magnet arrives without its metadata: no files yet, and the
+          // percentage says so. The original hides the contents group in
+          // exactly that case rather than showing an empty grid.
+          hasMetadata: files.length > 0 || detail.metadataPercentComplete === 1,
+          downloadDir: String(detail.downloadDir ?? ""),
+        };
+      } catch (e) {
+        setError(String(e));
+        return null;
+      }
+    },
+    [refresh, rememberDir, announceDuplicate, duplicateIdOf, t],
+  );
+
+  /** Apply the Add dialog's choices to the torrent it just handed over. */
+  const applyPreparedAdd = useCallback(
+    async (prepared: PreparedAdd, choices: AddChoices) => {
+      try {
+        const patch: Record<string, unknown> = { "peer-limit": choices.peerLimit };
+        if (choices.wanted.length > 0) patch["files-wanted"] = choices.wanted;
+        if (choices.unwanted.length > 0) patch["files-unwanted"] = choices.unwanted;
+        await rpc.setTorrent([prepared.id], patch);
+        // Renaming the torrent itself is a rename of its root path on the
+        // daemon, which is how the original's "Save as" does it.
+        if (choices.name && choices.name !== prepared.name) {
+          await rpc.renamePath(prepared.id, prepared.name, choices.name);
+        }
+        if (choices.start) await rpc.action("start", [prepared.id]);
+        setSelection(new Set([prepared.id]));
         setShowAdd(false);
         setClipboardLink("");
         await refresh();
-        await announceDuplicate(
-          duplicateIdOf(res),
-          options.filename ?? "",
-          options.local_torrent_path ?? "",
-        );
+        await refreshDetail();
       } catch (e) {
         setError(String(e));
       }
     },
-    [refresh, rememberDir, announceDuplicate, duplicateIdOf],
+    [refresh, refreshDetail],
+  );
+
+  /** Drop a torrent whose Add dialog was backed out of, as the original does. */
+  const discardPreparedAdd = useCallback(
+    async (id: number) => {
+      try {
+        await rpc.action("remove", [id]);
+        await refresh();
+      } catch (e) {
+        setError(String(e));
+      }
+    },
+    [refresh],
   );
 
   // Stable identity: the dialog reloads its form in an effect keyed on this
@@ -1659,7 +1729,9 @@ function AppInner() {
             setShowAdd(false);
             setClipboardLink("");
           }}
-          onSubmit={submitAdd}
+          onPrepare={prepareAdd}
+          onApply={applyPreparedAdd}
+          onDiscard={discardPreparedAdd}
           dirHistory={dirHistory}
         />
       )}

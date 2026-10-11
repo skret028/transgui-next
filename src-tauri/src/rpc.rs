@@ -371,6 +371,9 @@ const DETAIL_FIELDS: &[&str] = &[
     "peer-limit",
     "seedIdleLimit",
     "seedIdleMode",
+    // The Add dialog shows the file list only once the metadata has arrived: a
+    // magnet reports this below 1.0 and an empty `files` until then.
+    "metadataPercentComplete",
 ];
 
 /// Fetch detailed records for the given torrent ids.

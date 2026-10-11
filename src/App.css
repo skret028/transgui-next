@@ -750,6 +750,28 @@ table.sub-table td.empty {
 .row input {
   flex: 1;
 }
+/* The Add dialog's file picker: a scrollable list of check rows. */
+.file-picker {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid #363c46;
+  border-radius: 6px;
+  padding: 4px;
+  background: #14171b;
+}
+.file-picker .chk {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 2px 4px;
+  margin: 0;
+}
+.file-picker .chk .size {
+  margin-left: auto;
+  color: #8b939d;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .kv-inline {
   display: flex;
   align-items: center;
