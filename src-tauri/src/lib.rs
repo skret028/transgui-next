@@ -357,6 +357,7 @@ pub fn run() {
             rpc::rpc_set_labels,
             rpc::rpc_torrent_set,
             rpc::rpc_add_torrent,
+            rpc::rpc_torrent_file_trackers,
             rpc::rpc_session_stats,
             rpc::rpc_free_space,
             rpc::rpc_port_test,

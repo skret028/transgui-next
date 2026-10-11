@@ -102,11 +102,16 @@ implemented.
 | Stop seeding a torrent when it goes inactive | `torrprops` "Stop seeding when inactive for" | **Done** — the inactivity limit and its mode, with the minutes field enabled only in the custom mode; verified writing mode 1 / 45 minutes and restoring 0 / 30 |
 | Copy a file's path to the clipboard | `acCopyPath` (copies the focused file's full path) | **Done** — a copy button on every file row. It copies the mapped local path when the mapping reaches one and the daemon's own path otherwise; the original copies the daemon's |
 | Status bar, sizes mode | `acStatusBarSizes` (total size, size to download, downloaded, remaining for the selection) | **Done** — "Status bar fields → Status bar - Sizes": the four sizes, summed over the selection or over what is shown, from the size fields so the parts add up |
-| Adding a torrent that is already there | `torrent-duplicate` → offer to merge the link's trackers into the existing torrent | **Done** — a repeat add says so, selects the torrent that was already there, and, when the link named trackers the torrent does not have, asks before merging them. Verified: a magnet carrying an extra tracker added exactly that tracker. A *local .torrent* duplicate has nothing to merge, because its announce list is never read on this side |
+| Adding a torrent that is already there | `torrent-duplicate` → offer to merge the link's trackers into the existing torrent | **Done** — a repeat add says so in a dialog, selects the torrent that was already there, and, when the add named trackers that torrent does not have, asks before merging them. The trackers come from the magnet's `tr=` fields or from a local `.torrent` file's announce list, which is read on this side because the daemon never reports it back. Verified: a magnet carrying an extra tracker added exactly that tracker, and so did a `.torrent` file whose announce list had one more |
 | Open a file with the OS | `acOpenFile` | **Done** — an open button beside copy-path, offered only when the file is reachable from this machine; verified launching the associated application with the file |
 
 ## Deliberate differences
 
+- **A repeat add always opens a dialog, but only asks about trackers when there
+  is something to merge.** The original always puts up the same confirmation,
+  even when the add named no trackers, in which case answering yes does nothing.
+  Telling the user it is already there - and asking only when answering can
+  actually change something - keeps the information without the dead question.
 - **Remove asks for confirmation only when the data goes with it.** The original
   confirms both; here only the irreversible action does.
 - **Daemon and application options are one settings dialog** with sections,

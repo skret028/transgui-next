@@ -605,6 +605,194 @@ pub async fn rpc_add_torrent(
     rpc_call(state.inner(), "torrent-add", args).await
 }
 
+/// The trackers named inside a local .torrent file, in order, duplicates dropped.
+///
+/// Needed because a repeat add is settled on the daemon side: when
+/// `torrent-add` answers `torrent-duplicate` it reports only the hash, id and
+/// name, never the announce list that came with the file. Offering to merge the
+/// file's trackers therefore means reading them here.
+#[tauri::command]
+pub fn rpc_torrent_file_trackers(path: String) -> Result<Vec<String>, String> {
+    let bytes = std::fs::read(path.trim()).map_err(|e| format!("读取本地种子失败：{e}"))?;
+    Ok(trackers_in_metainfo(&bytes))
+}
+
+/// `announce` plus every URL in `announce-list` from a bencoded metainfo.
+///
+/// Hand-rolled rather than pulling in a bencode crate: two keys are wanted from
+/// a file the daemon already accepts, and a full parser would be a lot of
+/// surface for that. The input is untrusted, so the walk is depth-bounded and
+/// every length is checked before it is used, and anything malformed simply
+/// yields no trackers.
+fn trackers_in_metainfo(data: &[u8]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut pos = 0usize;
+    if data.first() != Some(&b'd') {
+        return out;
+    }
+    pos += 1;
+    loop {
+        match data.get(pos) {
+            None | Some(b'e') => break,
+            Some(_) => {}
+        }
+        let key = match read_bencode_bytes(data, &mut pos) {
+            Some(k) => k,
+            None => break,
+        };
+        match key {
+            b"announce" => match read_bencode_bytes(data, &mut pos) {
+                Some(value) => push_tracker(&mut out, value),
+                None => break,
+            },
+            b"announce-list" => {
+                if !read_announce_list(data, &mut pos, &mut out) {
+                    break;
+                }
+            }
+            _ => {
+                if !skip_bencode(data, &mut pos, 0) {
+                    break;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `announce-list` is a list of tiers, each tier a list of URL strings.
+fn read_announce_list(data: &[u8], pos: &mut usize, out: &mut Vec<String>) -> bool {
+    if data.get(*pos) != Some(&b'l') {
+        return skip_bencode(data, pos, 0);
+    }
+    *pos += 1;
+    loop {
+        match data.get(*pos) {
+            Some(b'e') => {
+                *pos += 1;
+                return true;
+            }
+            Some(b'l') => {
+                *pos += 1;
+                loop {
+                    match data.get(*pos) {
+                        Some(b'e') => {
+                            *pos += 1;
+                            break;
+                        }
+                        Some(_) => match read_bencode_bytes(data, pos) {
+                            Some(value) => push_tracker(out, value),
+                            None => return false,
+                        },
+                        None => return false,
+                    }
+                }
+            }
+            Some(_) => {
+                if !skip_bencode(data, pos, 0) {
+                    return false;
+                }
+            }
+            None => return false,
+        }
+    }
+}
+
+fn push_tracker(out: &mut Vec<String>, value: &[u8]) {
+    let text = String::from_utf8_lossy(value);
+    let trimmed = text.trim();
+    if trimmed.is_empty() || out.iter().any(|x| x == trimmed) {
+        return;
+    }
+    out.push(trimmed.to_string());
+}
+
+/// Skip one bencoded value of any type. False means malformed - the caller stops
+/// rather than guessing, so a corrupt file yields no trackers.
+fn skip_bencode(data: &[u8], pos: &mut usize, depth: usize) -> bool {
+    if depth > 16 {
+        return false;
+    }
+    match data.get(*pos) {
+        Some(b'i') => {
+            *pos += 1;
+            while let Some(b) = data.get(*pos) {
+                if *b == b'e' {
+                    *pos += 1;
+                    return true;
+                }
+                if !b.is_ascii_digit() && *b != b'-' {
+                    return false;
+                }
+                *pos += 1;
+            }
+            false
+        }
+        Some(b'l') => {
+            *pos += 1;
+            loop {
+                match data.get(*pos) {
+                    Some(b'e') => {
+                        *pos += 1;
+                        return true;
+                    }
+                    Some(_) => {
+                        if !skip_bencode(data, pos, depth + 1) {
+                            return false;
+                        }
+                    }
+                    None => return false,
+                }
+            }
+        }
+        Some(b'd') => {
+            *pos += 1;
+            loop {
+                match data.get(*pos) {
+                    Some(b'e') => {
+                        *pos += 1;
+                        return true;
+                    }
+                    Some(_) => {
+                        // Key, then value.
+                        if !skip_bencode(data, pos, depth + 1) || !skip_bencode(data, pos, depth + 1) {
+                            return false;
+                        }
+                    }
+                    None => return false,
+                }
+            }
+        }
+        Some(b'0'..=b'9') => read_bencode_bytes(data, pos).is_some(),
+        _ => false,
+    }
+}
+
+/// `<length>:<bytes>`. Lengths are bounded before use, so a bogus header cannot
+/// ask for a slice the file does not have.
+fn read_bencode_bytes<'a>(data: &'a [u8], pos: &mut usize) -> Option<&'a [u8]> {
+    let start = *pos;
+    let mut len = 0usize;
+    while let Some(b) = data.get(*pos) {
+        if !b.is_ascii_digit() {
+            break;
+        }
+        len = len.checked_mul(10)?.checked_add((b - b'0') as usize)?;
+        if len > 1 << 20 {
+            return None;
+        }
+        *pos += 1;
+    }
+    if *pos == start || data.get(*pos) != Some(&b':') {
+        return None;
+    }
+    *pos += 1;
+    let end = pos.checked_add(len)?;
+    let slice = data.get(*pos..end)?;
+    *pos = end;
+    Some(slice)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -968,5 +1156,118 @@ mod tests {
                 "bandwidthPriority"
             );
         }
+    }
+
+    /// `<len>:<bytes>`, the one bencode form the tests need to build by hand.
+    fn benc(value: &str) -> String {
+        format!("{}:{}", value.len(), value)
+    }
+
+    /// A metainfo dict with the given announce/tiers plus an info dict.
+    fn metainfo(announce: Option<&str>, tiers: &[&[&str]]) -> Vec<u8> {
+        let mut out = String::from("d");
+        if let Some(a) = announce {
+            out.push_str(&benc("announce"));
+            out.push_str(&benc(a));
+        }
+        if !tiers.is_empty() {
+            out.push_str(&benc("announce-list"));
+            out.push('l');
+            for tier in tiers {
+                out.push('l');
+                for url in *tier {
+                    out.push_str(&benc(url));
+                }
+                out.push('e');
+            }
+            out.push('e');
+        }
+        out.push_str(&benc("info"));
+        out.push_str("d6:lengthi1024e4:name4:test12:piece lengthi16384e6:pieces20:");
+        out.push_str(&"a".repeat(20));
+        out.push('e');
+        out.push('e');
+        out.into_bytes()
+    }
+
+    #[test]
+    fn reads_announce_then_the_tiers_in_order() {
+        let a = "http://a.example:8080/announce";
+        let b = "udp://b.example:6969/announce";
+        assert_eq!(
+            trackers_in_metainfo(&metainfo(Some(a), &[&[a, b]])),
+            vec![a.to_string(), b.to_string()]
+        );
+    }
+
+    #[test]
+    fn repeated_trackers_are_dropped_once() {
+        let a = "http://a.example/announce";
+        let b = "http://b.example/announce";
+        assert_eq!(
+            trackers_in_metainfo(&metainfo(Some(a), &[&[a], &[b], &[a]])),
+            vec![a.to_string(), b.to_string()],
+            "duplicates dropped, order kept"
+        );
+    }
+
+    #[test]
+    fn announce_list_alone_is_enough() {
+        let a = "http://a.example/announce";
+        assert_eq!(trackers_in_metainfo(&metainfo(None, &[&[a]])), vec![a.to_string()]);
+    }
+
+    #[test]
+    fn a_torrent_without_trackers_yields_nothing() {
+        assert!(trackers_in_metainfo(&metainfo(None, &[])).is_empty());
+    }
+
+    #[test]
+    fn a_corrupt_file_yields_nothing_rather_than_panicking() {
+        for bad in [
+            "",
+            "x",
+            "d",
+            "d8:announce",
+            "d8:announce5:abc",
+            "d3:foo",
+            "d4:infod6:lengthi1e",
+            "d8:announce999999999999999999:http://a.examplee",
+        ] {
+            assert!(
+                trackers_in_metainfo(bad.as_bytes()).is_empty(),
+                "{bad:?} should yield nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_keys_are_skipped_by_type() {
+        // Nested dicts, lists and integers around the trackers must not derail
+        // the walk: only the two announce keys are read, everything else is
+        // stepped over.
+        let a = "http://a.example/announce";
+        let mut meta = String::from("d");
+        meta.push_str(&benc("comment"));
+        meta.push_str("d1:ai1e1:bl1:x1:yee");
+        meta.push_str(&benc("announce"));
+        meta.push_str(&benc(a));
+        meta.push_str(&benc("extra"));
+        meta.push_str("li42e3:abce");
+        meta.push('e');
+        assert_eq!(trackers_in_metainfo(meta.as_bytes()), vec![a.to_string()]);
+    }
+
+    /// Reads a real .torrent, written by a real encoder rather than by the
+    /// helpers above: set TXGUI_TORRENT_FILE and run
+    /// `cargo test --lib -- --ignored torrent_file` to check it.
+    #[test]
+    #[ignore = "set TXGUI_TORRENT_FILE to a .torrent file"]
+    fn live_reads_trackers_from_a_real_torrent_file() {
+        let path = std::env::var("TXGUI_TORRENT_FILE").expect("TXGUI_TORRENT_FILE");
+        let bytes = std::fs::read(&path).expect("read the torrent file");
+        let got = trackers_in_metainfo(&bytes);
+        println!("{path}: {got:?}");
+        assert!(!got.is_empty(), "a real .torrent should name at least one tracker");
     }
 }

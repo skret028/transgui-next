@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, open, save } from "@tauri-apps/plugin-dialog";
+import { ask, message, open, save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { rpc } from "./api";
 import {
@@ -673,36 +673,55 @@ function AppInner() {
 
   /**
    * A repeat add is not a failure, but it is not nothing either: the user asked
-   * for a torrent to be added and no new one appeared. Say so, select the one
-   * that was already there, and - when the link named trackers the torrent does
-   * not have yet - offer to merge them in, which is what the original asks in
-   * this spot and the only thing that can still come of the add.
+   * for a torrent to be added and no new one appeared. The original always
+   * opens a dialog in this spot, and so does this - a repeat add that only
+   * flashed a notice for two seconds read as "nothing happened".
    *
-   * The trackers the torrent already has are dropped before the merge, so
-   * asking yes can never add a duplicate tier.
+   * The torrent that was already there is selected, so it is clear which entry
+   * collided. When the add named trackers the torrent does not have yet - from
+   * the magnet's tr= fields, or from a local .torrent file's announce list,
+   * which only ever exists on this side - it asks before merging them.
    */
   const announceDuplicate = useCallback(
-    async (id: number | null, link = "") => {
+    async (id: number | null, link = "", localPath = "") => {
       if (id == null) return;
       setSelection(new Set([id]));
       setNotice(t("Torrent already exists in the list"));
-      const wanted = trackersFromMagnet(link);
-      if (wanted.length === 0) return;
       const name = torrents.find((x) => x.id === id)?.name ?? "";
-      const ok = await ask(
-        `${t("Torrent already exists in the list")}${name ? `: ${name}` : ""}.` +
-          `\n\n${t("Update trackers for the existing torrent?")}`,
-        { kind: "info" },
-      );
+      const text = `${t("Torrent already exists in the list")}${name ? `: ${name}` : ""}.`;
+
+      let wanted = trackersFromMagnet(link);
+      if (wanted.length === 0 && localPath.trim()) {
+        try {
+          wanted = await rpc.torrentFileTrackers(localPath.trim());
+        } catch {
+          // Unreadable file: fall through to just saying it already exists.
+        }
+      }
+
+      // Only ask about trackers that would really be added: a question with
+      // nothing behind it is worse than no question.
+      let fresh: string[] = [];
+      if (wanted.length > 0) {
+        try {
+          const [detail] = await rpc.details([id]);
+          const have = new Set((detail?.trackers ?? []).map((x) => x.announce));
+          fresh = wanted.filter((x) => !have.has(x));
+        } catch (e) {
+          setError(String(e));
+        }
+      }
+
+      if (fresh.length === 0) {
+        await message(text);
+        return;
+      }
+      const ok = await ask(`${text}\n\n${t("Update trackers for the existing torrent?")}`, {
+        kind: "info",
+      });
       if (!ok) return;
       try {
-        const [detail] = await rpc.details([id]);
-        const have = new Set((detail?.trackers ?? []).map((x) => x.announce));
-        const fresh = wanted.filter((x) => !have.has(x));
-        if (fresh.length > 0) {
-          await rpc.setTorrent([id], { trackerAdd: fresh });
-          setNotice(t("Copied"));
-        }
+        await rpc.setTorrent([id], { trackerAdd: fresh });
       } catch (e) {
         setError(String(e));
       }
@@ -718,7 +737,11 @@ function AppInner() {
         setShowAdd(false);
         setClipboardLink("");
         await refresh();
-        await announceDuplicate(duplicateIdOf(res), options.filename ?? "");
+        await announceDuplicate(
+          duplicateIdOf(res),
+          options.filename ?? "",
+          options.local_torrent_path ?? "",
+        );
       } catch (e) {
         setError(String(e));
       }
@@ -824,15 +847,20 @@ function AppInner() {
             }
             void (async () => {
               let dup: number | null = null;
+              let dupPath = "";
               for (const path of torrents) {
                 try {
-                  dup = duplicateIdOf(await rpc.add({ local_torrent_path: path })) ?? dup;
+                  const id = duplicateIdOf(await rpc.add({ local_torrent_path: path }));
+                  if (id != null) {
+                    dup = id;
+                    dupPath = path;
+                  }
                 } catch (e) {
                   setError(String(e));
                 }
               }
               await refresh();
-              await announceDuplicate(dup);
+              await announceDuplicate(dup, "", dupPath);
             })();
           } else {
             setDragging(false);

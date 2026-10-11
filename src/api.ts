@@ -62,6 +62,8 @@ export const rpc = {
     invoke<unknown>("rpc_torrent_set", { ids, patch }),
 
   add: (options: AddTorrentOptions) => invoke<unknown>("rpc_add_torrent", { options }),
+  /** The trackers named inside a local .torrent file (empty if unreadable). */
+  torrentFileTrackers: (path: string) => invoke<string[]>("rpc_torrent_file_trackers", { path }),
 
   sessionStats: () => invoke<SessionStats>("rpc_session_stats"),
 
