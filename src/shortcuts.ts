@@ -29,7 +29,11 @@ export type Shortcut =
   /** Show the selection's download folder in the file manager. */
   | { kind: "reveal" }
   /** Mark every file of the selection as "don't download". */
-  | { kind: "set-not-download" };
+  | { kind: "set-not-download" }
+  /** Rename the selected torrent, as F2 does. */
+  | { kind: "rename" }
+  /** Move the selection's data to another location, as F6 does. */
+  | { kind: "move-data" };
 
 export interface KeyLike {
   key: string;
@@ -112,10 +116,14 @@ export function resolveShortcut(e: KeyLike, ctx: ShortcutContext): Shortcut | nu
   // claimed further up; Cmd+F3/F4 are left alone.
   if (!mod && !e.altKey) {
     switch (key) {
+      case "F2":
+        return { kind: "rename" };
       case "F3":
         return { kind: "action", value: e.shiftKey ? "start_now" : "start" };
       case "F4":
         return { kind: "action", value: "stop" };
+      case "F6":
+        return { kind: "move-data" };
       case "F7":
         return { kind: "labels" };
       case "F8":

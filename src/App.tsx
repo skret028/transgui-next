@@ -93,6 +93,7 @@ import { PromptDialog } from "./components/PromptDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
 import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
+import { MoveLocationDialog } from "./components/MoveLocationDialog";
 import { StatsDialog } from "./components/StatsDialog";
 import { ColumnsDialog } from "./components/ColumnsDialog";
 import { FilterPane } from "./components/FilterPane";
@@ -133,6 +134,10 @@ function AppInner() {
   const [notice, setNotice] = useState("");
   /** Where the torrent list's context menu is open, if it is. */
   const [rowMenu, setRowMenu] = useState<{ x: number; y: number } | null>(null);
+  /** The rename dialog, reached by F2 or the row menu. */
+  const [renameOpen, setRenameOpen] = useState(false);
+  /** The move-data dialog, reached by F6 or the row menu. */
+  const [moveOpen, setMoveOpen] = useState(false);
   const [torrents, setTorrents] = useState<Torrent[]>([]);
 
   const [selection, setSelection] = useState<Set<number>>(new Set());
@@ -588,6 +593,7 @@ function AppInner() {
     { id: "stop", labelKey: "Stop" },
     { id: "verify", labelKey: "Verify" },
     { id: "reannounce", labelKey: "Reannounce" },
+    { id: "move_location", labelKey: "Set data location…" },
     { id: null, labelKey: "" },
     {
       id: "priority",
@@ -613,6 +619,7 @@ function AppInner() {
     { id: "copy_hash", labelKey: "Copy" },
     { id: null, labelKey: "" },
     { id: "labels", labelKey: "Labels" },
+    { id: "rename", labelKey: "Rename" },
     { id: "props", labelKey: "Properties" },
     { id: "trackers", labelKey: "Modify trackers…" },
     { id: null, labelKey: "" },
@@ -646,6 +653,14 @@ function AppInner() {
         setShowProps(true);
         return;
       }
+      if (act === "rename") {
+        setRenameOpen(true);
+        return;
+      }
+      if (act === "move_location") {
+        setMoveOpen(true);
+        return;
+      }
       await action(act);
     },
     [selection, torrents, action, copyMagnet, refresh, setPriority, t],
@@ -663,6 +678,14 @@ function AppInner() {
       }
     },
     [refresh, refreshDetail],
+  );
+
+  /** The first selected torrent, in list order: what F2 renames, and what F6's
+   *  dialog is about. The original edits the focused row, which is the same
+   *  notion - one row in the list is the current one. */
+  const firstSelected = useMemo(
+    () => torrents.find((x) => selection.has(x.id)) ?? null,
+    [torrents, selection],
   );
 
   const openStats = useCallback(async () => {
@@ -1108,6 +1131,12 @@ function AppInner() {
           break;
         case "set-not-download":
           void setNotDownload();
+          break;
+        case "rename":
+          setRenameOpen(true);
+          break;
+        case "move-data":
+          setMoveOpen(true);
           break;
       }
     };
@@ -1706,6 +1735,8 @@ function AppInner() {
               loading={detailLoading}
               revealTarget={revealTarget}
               mapPath={mapLocalPath}
+              dirHistory={dirHistory}
+              onMoved={rememberDir}
               onClose={() => {
                 detailIdRef.current = null;
                 setDetail(null);
@@ -1818,6 +1849,44 @@ function AppInner() {
           known={knownLabels}
           onClose={() => setShowLabels(false)}
           onApply={applyLabels}
+        />
+      )}
+
+      {renameOpen && firstSelected && (
+        <PromptDialog
+          title={t("Rename")}
+          label={t("New name")}
+          context={`${firstSelected.downloadDir}/${firstSelected.name}`}
+          initial={firstSelected.name}
+          submitLabel={t("Rename")}
+          onClose={() => setRenameOpen(false)}
+          onSubmit={async (name) => {
+            const next = name.trim();
+            // Renaming the torrent means renaming its folder on disk, so the
+            // path to send is the one the name forms: the root of the torrent.
+            if (!next || next === firstSelected.name) return;
+            await rpc.renamePath(firstSelected.id, firstSelected.name, next);
+            await refresh();
+            await refreshDetail();
+          }}
+        />
+      )}
+
+      {moveOpen && firstSelected && (
+        <MoveLocationDialog
+          count={selection.size}
+          current={firstSelected.downloadDir}
+          name={firstSelected.name}
+          dirHistory={dirHistory}
+          onClose={() => setMoveOpen(false)}
+          onSubmit={async (location, moveData) => {
+            await rpc.setLocation([...selection], location, moveData);
+            // The destination joins the recent directories, as the original's
+            // LastMoveDir does.
+            rememberDir(location);
+            await refresh();
+            await refreshDetail();
+          }}
         />
       )}
 

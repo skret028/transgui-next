@@ -218,6 +218,29 @@ eq(
   "properties needs a selection",
 );
 
+// F2 renames and F6 moves the data, as the original binds them. The original
+// edits the name in place; this asks in a dialog instead, which is what the
+// rest of the rewrite does for renames.
+eq(resolveShortcut(key("F2"), list), { kind: "rename" }, "F2 renames the torrent");
+eq(resolveShortcut(key("F6"), list), { kind: "move-data" }, "F6 moves the data");
+eq(
+  resolveShortcut(key("F2"), ctx({ hasSelection: false })),
+  null,
+  "F2 needs a selection",
+);
+eq(
+  resolveShortcut(key("F6"), ctx({ hasSelection: false })),
+  null,
+  "F6 needs a selection",
+);
+eq(
+  resolveShortcut(key("F2"), ctx({ connected: false })),
+  null,
+  "F2 needs a connection",
+);
+eq(resolveShortcut(key("F2", { metaKey: true }), list), null, "Cmd+F2 is not F2");
+eq(resolveShortcut(key("F6", { altKey: true }), list), null, "Alt+F6 is not F6");
+
 console.log(`shortcuts: ${passed} assertions passed`);
 
 if (failures.length > 0) {

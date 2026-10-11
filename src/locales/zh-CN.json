@@ -223,7 +223,7 @@
   "No torrent location was specified": "没有指定 Torrent 位置",
   "Path": "路径",
   "Reannounce (get more peers)": "重新汇报（获取更多节点）",
-  "Set data location": "设置数据位置",
+  "Set data location…": "设置数据位置",
   "Size to download": "下载大小",
   "The block list has been updated successfully.~The list entries count: %d": "黑名单更新成功。~列表条目数：%d",
   "The directory for incomplete files was not specified": "未指定未完成文件的目录",
@@ -532,11 +532,7 @@
   "Copied": "已复制",
   "Could not copy to the clipboard": "无法复制到剪贴板",
   "Move data": "移动数据",
-  "Destination": "目标目录",
-  "Move the data on disk": "同时在磁盘上移动数据",
-  "If unchecked, only the recorded location changes.": "不勾选则只改记录位置，不移动实际文件。",
   "Move…": "移动…",
-  "Current location": "当前位置",
   "Stalled": "卡住",
   "dur.day_hour": "{d}天 {h}时",
   "dur.hour_min": "{h}时 {m}分",
@@ -646,5 +642,6 @@
   "Modify trackers…": "修改 Tracker…",
   "Connect to {host}": "连接到 {host}",
   "Please enter a password to connect to {host}:": "请输入连接到 {host} 的密码：",
-  "Still not authorised - check the password": "仍未通过验证，请检查密码"
+  "Still not authorised - check the password": "仍未通过验证，请检查密码",
+  "New location for torrent data:": "数据的新位置："
 }

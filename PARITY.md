@@ -98,7 +98,8 @@ implemented.
 | The tray menu | `pmTray` | **Done** — show and hide the window, start and stop every torrent, one submenu per direction for the speed limits, the alternative-speed toggle, quit. The original's tray is not its application menu: `pmTray` is its own eleven-item list, and this mirrors it item for item. The two speed submenus are filled from the list the toolbar uses rather than from the original's per-connection `DownSpeeds`/`UpSpeeds` setting, so the tray cannot offer a speed the button beside it does not |
 | About / help menu | `about.pas` | **Done** — a native Help menu with check for new version, home page, development site and About, plus an About panel in the app menu where macOS expects it |
 | History of download/move directories | `folderhistory.pas` | **Done** — the Add dialog's directory field offers the last 10 (newest first, de-duplicated); kept beside the settings file, not in the exported settings |
-| Keyboard shortcuts beyond select-all | the original's `ShortCut` codes | **Done** — the original's bindings key by key: F3/F4 start/stop, Shift+F3 force start, Ctrl+F3/F4 start/stop everything, F8 alternative speeds, Del remove, Alt/Cmd/Shift+Del remove with data, Ins add torrent, F7 labels, Alt+Enter properties, Ctrl+H/N/L priority, Ctrl+I don't download, Ctrl+R reannounce, Ctrl+PgUp/PgDn queue moves (Shift for the ends), Ctrl+Enter show the folder, F9 settings, Ctrl+F12 big toolbar, Ctrl+A select all (`src/shortcuts.ts`, 58 assertions). Two are left out because the UI they need does not exist yet: F2 rename (the original edits the name cell inline) and F6 (move data needs a location dialog) |
+| Keyboard shortcuts beyond select-all | the original's `ShortCut` codes | **Done** — the original's bindings key by key: F2 rename, F3/F4 start/stop, Shift+F3 force start, Ctrl+F3/F4 start/stop everything, F6 move data, F8 alternative speeds, Del remove, Alt/Cmd/Shift+Del remove with data, Ins add torrent, F7 labels, Alt+Enter properties, Ctrl+H/N/L priority, Ctrl+I don't download, Ctrl+R reannounce, Ctrl+PgUp/PgDn queue moves (Shift for the ends), Ctrl+Enter show the folder, F9 settings, Ctrl+F12 big toolbar, Ctrl+A select all (`src/shortcuts.ts`, 65 assertions) |
+| Rename, and "Set data location…" | `acRename`, `acMoveTorrent`, `movetorrent.lfm` | **Done** — F2 renames the selected torrent and F6 opens the original's data-location dialog: the destination starts at where the data is now, with the recent-directory history and a Browse button beside it, and "move the torrent data from the current location to the new location" starts checked, so the files are moved. Unchecked, only the recorded location changes. The rename goes over as `torrent-rename-path` for the torrent's root, so the folder on disk is renamed with it. Both are in the row menu as well, where the original keeps its "Rename" and "Set data location…" items |
 | Native folder picker when adding a torrent | `Select a folder for download` | **Done** — a Browse button opens the native directory picker; the path is sent as text (it is a path on this machine, not the daemon's) |
 | Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Done** — status, label, download directory and tracker |
 | Columns: Seeds, Tracker, Tracker status, Completed on, Last active, Priority, Size to download, ID, Seeding time, Size left, Private, Uploaded | all in the column setup | **Done** — the picker offers 26 columns |
@@ -134,6 +135,12 @@ implemented.
 - **Country flags are emoji** computed from the GeoIP country code rather than a
   downloaded `flags.zip`, and country resolution happens whenever the GeoIP
   database is present instead of behind a toggle.
+- **Renaming asks in a dialog rather than turning the cell into an edit box.**
+  The original's F2 edits the name in place, in the torrent list and in the
+  files list. Here it opens the same small rename dialog the rewrite uses for
+  names everywhere - the files list, the Add dialog's "Save as" - so there is
+  one way to rename something rather than two. What the key does is unchanged:
+  renames whatever is selected.
 
 ## Ahead of the original
 

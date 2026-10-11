@@ -23,6 +23,10 @@ interface Props {
    * just the download directory.
    */
   mapPath?: (path: string) => string | null;
+  /** Recent destinations, offered by the move dialog. */
+  dirHistory?: string[];
+  /** Called with the destination after a move, to keep that history current. */
+  onMoved?: (location: string) => void;
   onClose: () => void;
   onRefresh: () => void;
 }
@@ -67,7 +71,16 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function DetailsPanel({ detail, loading, revealTarget, mapPath, onClose, onRefresh }: Props) {
+export function DetailsPanel({
+  detail,
+  loading,
+  revealTarget,
+  mapPath,
+  dirHistory = [],
+  onMoved,
+  onClose,
+  onRefresh,
+}: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("info");
   const [copied, setCopied] = useState("");
@@ -592,9 +605,12 @@ export function DetailsPanel({ detail, loading, revealTarget, mapPath, onClose, 
         <MoveLocationDialog
           count={1}
           current={detail.downloadDir}
+          name={detail.name}
+          dirHistory={dirHistory}
           onClose={() => setMoving(false)}
           onSubmit={async (location, moveData) => {
             await rpc.setLocation([detail.id], location, moveData);
+            onMoved?.(location);
             onRefresh();
           }}
         />
