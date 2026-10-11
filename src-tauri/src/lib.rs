@@ -6,10 +6,12 @@ mod rpc;
 mod update;
 
 use rpc::AppState;
+use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use tauri::menu::{
-    AboutMetadataBuilder, Menu, MenuBuilder, MenuItem, MenuItemBuilder, PredefinedMenuItem,
-    SubmenuBuilder,
+    AboutMetadataBuilder, CheckMenuItem, Menu, MenuBuilder, MenuItem, MenuItemBuilder,
+    PredefinedMenuItem, Submenu, SubmenuBuilder,
 };
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
@@ -66,6 +68,53 @@ fn apply_tray_visibility(app: &AppHandle) {
 fn set_tray_always_visible(app: AppHandle, state: tauri::State<'_, TrayAlwaysVisible>, always: bool) {
     state.0.store(always, Ordering::SeqCst);
     apply_tray_visibility(&app);
+}
+
+/// What the tray's menu was last built from.
+///
+/// The speed limits and the alternative-speed flag belong to the daemon, not to
+/// this process, so the window pushes them down whenever they change.
+/// Remembering the last payload is what keeps a menu rebuild from happening on
+/// every poll.
+#[derive(Clone, Default, Deserialize, PartialEq)]
+struct TraySync {
+    connected: bool,
+    alt_speed: bool,
+    down_enabled: bool,
+    down_kbps: u32,
+    up_enabled: bool,
+    up_kbps: u32,
+    speeds: Vec<u32>,
+}
+
+pub struct TrayState(Mutex<TraySync>);
+
+/// Level the tray menu with the daemon's session settings.
+///
+/// Rebuilt rather than poked item by item: there are a dozen entries, the values
+/// change only when the user changes them, and a rebuild cannot leave a stale
+/// checkmark behind. The original syncs its tray the same way, from the same
+/// session fields, on every settings refresh.
+#[tauri::command]
+fn set_tray_state(
+    app: AppHandle,
+    state: tauri::State<'_, TrayState>,
+    sync: TraySync,
+) -> Result<(), String> {
+    let mut next = sync;
+    next.speeds.sort_unstable();
+    next.speeds.dedup();
+    {
+        let current = state.0.lock().map_err(|e| e.to_string())?;
+        if *current == next {
+            return Ok(());
+        }
+    }
+    let menu = build_tray_menu(&app, &next).map_err(|e| e.to_string())?;
+    let tray = app.tray_by_id("main").ok_or("the tray icon is gone")?;
+    tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
+    *state.0.lock().map_err(|e| e.to_string())? = next;
+    Ok(())
 }
 
 /// Paths and magnet links the OS asked us to open.
@@ -193,32 +242,151 @@ fn toggle_main_window(app: &AppHandle) {
     apply_tray_visibility(app);
 }
 
-fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+/// One speed submenu of the tray: unlimited, then every preset, with the speed
+/// in force checked.
+///
+/// The original builds these the same way from the session's own limits and
+/// tags unlimited as -1; the preset list here is the toolbar's, handed over by
+/// the window, so the tray cannot offer a speed the button beside it does not.
+fn tray_speed_submenu(
+    app: &AppHandle,
+    prefix: &str,
+    title: &str,
+    speeds: &[u32],
+    enabled: bool,
+    current: u32,
+    connected: bool,
+) -> tauri::Result<Submenu<tauri::Wry>> {
+    let mut builder = SubmenuBuilder::new(app, title).enabled(connected);
+    let unlimited = CheckMenuItem::with_id(
+        app,
+        format!("{prefix}:-1"),
+        "无限",
+        true,
+        connected && !enabled,
+        None::<&str>,
+    )?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    builder = builder.item(&unlimited).item(&separator);
+    for kbps in speeds {
+        let item = CheckMenuItem::with_id(
+            app,
+            format!("{prefix}:{kbps}"),
+            format!("{kbps} KB/s"),
+            true,
+            connected && enabled && *kbps == current,
+            None::<&str>,
+        )?;
+        builder = builder.item(&item);
+    }
+    builder.build()
+}
+
+/// The tray's menu, mirroring the original's `pmTray`: show and hide the window,
+/// start and stop everything, one submenu per direction for the speed limits,
+/// the alternative-speed toggle, and quit.
+///
+/// The original's tray is not the application menu - it is this shorter list,
+/// wired to the same eighteen items by hand.
+fn build_tray_menu(app: &AppHandle, sync: &TraySync) -> tauri::Result<Menu<tauri::Wry>> {
     let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
     let hide = MenuItem::with_id(app, "hide", "隐藏窗口", true, None::<&str>)?;
-    let sep = PredefinedMenuItem::separator(app)?;
+    let start_all = MenuItem::with_id(app, "start_all", "开始所有", sync.connected, None::<&str>)?;
+    let stop_all = MenuItem::with_id(app, "stop_all", "停止所有", sync.connected, None::<&str>)?;
+    let alt_speed = CheckMenuItem::with_id(
+        app,
+        "alt_speed",
+        "替代速度",
+        sync.connected,
+        sync.alt_speed,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &hide, &sep, &quit])?;
+    let down = tray_speed_submenu(
+        app,
+        "down_speed",
+        "最大下载速度",
+        &sync.speeds,
+        sync.down_enabled,
+        sync.down_kbps,
+        sync.connected,
+    )?;
+    let up = tray_speed_submenu(
+        app,
+        "up_speed",
+        "最大上传速度",
+        &sync.speeds,
+        sync.up_enabled,
+        sync.up_kbps,
+        sync.connected,
+    )?;
+
+    MenuBuilder::new(app)
+        .item(&show)
+        .item(&hide)
+        .separator()
+        .item(&start_all)
+        .item(&stop_all)
+        .separator()
+        .item(&down)
+        .item(&up)
+        .item(&alt_speed)
+        .separator()
+        .item(&quit)
+        .build()
+}
+
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let menu = build_tray_menu(app, &TraySync::default())?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("transgui-next")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "show" => show_main_window(app),
-            "hide" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
+        .on_menu_event(|app, event| {
+            let id = event.id().as_ref();
+            match id {
+                "show" => show_main_window(app),
+                "hide" => {
+                    if let Some(w) = app.get_webview_window("main") {
+                        let _ = w.hide();
+                    }
+                    apply_tray_visibility(app);
                 }
-                apply_tray_visibility(app);
-            }
-            "quit" => {
-                if let Some(flag) = app.try_state::<QuitFlag>() {
-                    flag.0.store(true, Ordering::SeqCst);
+                "quit" => {
+                    if let Some(flag) = app.try_state::<QuitFlag>() {
+                        flag.0.store(true, Ordering::SeqCst);
+                    }
+                    app.exit(0);
                 }
-                app.exit(0);
+                // Everything below acts on the daemon, which the window owns:
+                // the tray asks the window to run the very helper the toolbar
+                // button runs, so the two cannot drift apart.
+                "start_all" => {
+                    let _ = app.emit("tray://start-all", ());
+                }
+                "stop_all" => {
+                    let _ = app.emit("tray://stop-all", ());
+                }
+                "alt_speed" => {
+                    // The check mark flips itself on macOS; the daemon remains
+                    // the authority and the window pushes the truth back down.
+                    let _ = app.emit("tray://alt-speed", ());
+                }
+                other => {
+                    // `<direction>_speed:<kbps>`, with -1 for unlimited.
+                    if let Some((which, kbps)) = other.split_once(':') {
+                        let direction = match which {
+                            "down_speed" => Some("down"),
+                            "up_speed" => Some("up"),
+                            _ => None,
+                        };
+                        if let (Some(direction), Ok(kbps)) = (direction, kbps.parse::<i64>()) {
+                            let _ = app.emit("tray://set-speed", (direction, kbps));
+                        }
+                    }
+                }
             }
-            _ => {}
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -345,6 +513,7 @@ pub fn run() {
         .manage(QuitFlag(AtomicBool::new(false)))
         .manage(CloseToTray(AtomicBool::new(true)))
         .manage(TrayAlwaysVisible::default())
+        .manage(TrayState(Mutex::new(TraySync::default())))
         .manage(PendingOpens::default())
         .invoke_handler(tauri::generate_handler![
             rpc::rpc_connect,
@@ -367,6 +536,7 @@ pub fn run() {
             take_pending_opens,
             set_close_to_tray,
             set_tray_always_visible,
+            set_tray_state,
             rpc_reveal_path,
             rpc_open_path,
             write_text_file,

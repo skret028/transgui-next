@@ -80,7 +80,7 @@ import {
   useT,
 } from "./i18n";
 import { ConnectionBar } from "./components/ConnectionBar";
-import { Toolbar } from "./components/Toolbar";
+import { SPEED_PRESETS, Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
 import { DetailsPanel } from "./components/DetailsPanel";
 import { pushDirHistory } from "./dirHistory";
@@ -1318,6 +1318,78 @@ function AppInner() {
     })();
     return () => unlisten?.();
   }, [t]);
+
+  // The tray offers what the original's does: start and stop everything, pick a
+  // speed limit per direction, flip the alternative speeds. All of it acts on
+  // the daemon, which the window owns, so the tray only asks for the very
+  // helper the toolbar button calls and the two cannot drift apart.
+  useEffect(() => {
+    const unlisteners: Array<() => void> = [];
+    let cancelled = false;
+    const on = async <T,>(name: string, handler: (event: { payload: T }) => void) => {
+      try {
+        const un = await listen<T>(name, handler);
+        if (cancelled) un();
+        else unlisteners.push(un);
+      } catch {
+        // not running under Tauri
+      }
+    };
+    void (async () => {
+      await on("tray://start-all", () => void globalAction("start_all"));
+      await on("tray://stop-all", () => void globalAction("stop_all"));
+      await on("tray://alt-speed", () => void toggleAltSpeed());
+      await on<[string, number]>("tray://set-speed", (event) => {
+        const [which, kbps] = event.payload;
+        void setSpeedLimit(which === "up" ? "up" : "down", kbps < 0 ? null : kbps);
+      });
+    })();
+    return () => {
+      cancelled = true;
+      for (const un of unlisteners) un();
+    };
+  }, [globalAction, toggleAltSpeed, setSpeedLimit]);
+
+  // Keep the tray's labels and check marks level with the daemon. Only these
+  // few values are dependencies, and the backend skips an unchanged payload, so
+  // the menu is rebuilt when a limit really moved rather than on every poll.
+  const trayAltSpeed = !!session?.["alt-speed-enabled"];
+  const trayDownEnabled = !!session?.["speed-limit-down-enabled"];
+  const trayDownKbps = Number(session?.["speed-limit-down"] ?? 0);
+  const trayUpEnabled = !!session?.["speed-limit-up-enabled"];
+  const trayUpKbps = Number(session?.["speed-limit-up"] ?? 0);
+  const traySpeeds = useMemo(() => {
+    const speeds = [...SPEED_PRESETS];
+    // The original lists whatever limit is in force even when it is not one of
+    // the presets, so a custom speed still gets a check mark of its own.
+    if (trayDownEnabled && trayDownKbps > 0) speeds.push(trayDownKbps);
+    if (trayUpEnabled && trayUpKbps > 0) speeds.push(trayUpKbps);
+    return Array.from(new Set(speeds)).sort((a, b) => a - b);
+  }, [trayDownEnabled, trayDownKbps, trayUpEnabled, trayUpKbps]);
+
+  useEffect(() => {
+    void rpc
+      .setTrayState({
+        connected,
+        alt_speed: trayAltSpeed,
+        down_enabled: trayDownEnabled,
+        down_kbps: trayDownKbps,
+        up_enabled: trayUpEnabled,
+        up_kbps: trayUpKbps,
+        speeds: traySpeeds,
+      })
+      .catch(() => {
+        // not running under Tauri
+      });
+  }, [
+    connected,
+    trayAltSpeed,
+    trayDownEnabled,
+    trayDownKbps,
+    trayUpEnabled,
+    trayUpKbps,
+    traySpeeds,
+  ]);
 
   // Tell the user once per torrent that finishes downloading.
   useEffect(() => {

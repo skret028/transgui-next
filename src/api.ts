@@ -13,6 +13,17 @@ import type {
   TorrentDetail,
 } from "./types";
 
+/** What the tray's menu is built from; the field names match the Rust struct. */
+export interface TraySync {
+  connected: boolean;
+  alt_speed: boolean;
+  down_enabled: boolean;
+  down_kbps: number;
+  up_enabled: boolean;
+  up_kbps: number;
+  speeds: number[];
+}
+
 export const rpc = {
   connect: (form: ConnForm) =>
     invoke<ConnectResult>("rpc_connect", {
@@ -38,6 +49,14 @@ export const rpc = {
 
   /** Tells the backend whether closing the window should hide it to the tray. */
   setCloseToTray: (hide: boolean) => invoke<void>("set_close_to_tray", { hide }),
+
+  /**
+   * Level the tray menu with the daemon's session. The speed limits and the
+   * alternative-speed flag live in the daemon, so the window owns them and
+   * pushes them down; the backend rebuilds the menu only when something
+   * actually changed.
+   */
+  setTrayState: (sync: TraySync) => invoke<void>("set_tray_state", { sync }),
 
   /** Tells the backend whether the tray icon stays visible while the window is shown. */
   setTrayAlwaysVisible: (always: boolean) =>

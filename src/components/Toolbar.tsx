@@ -33,7 +33,7 @@ interface Props {
 }
 
 /** Presets shared by both directions; 0 means unlimited (handled as a null). */
-const SPEED_PRESETS = [1, 5, 10, 50, 100, 500];
+export const SPEED_PRESETS = [1, 5, 10, 50, 100, 500];
 
 function SpeedSelect({
   label,
