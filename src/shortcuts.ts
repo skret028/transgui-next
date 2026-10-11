@@ -37,6 +37,9 @@ export type Shortcut =
 
 export interface KeyLike {
   key: string;
+  /** The physical key, when the event carries it. Shift+1 reports key "!", so
+   *  a binding on a digit has to look at this rather than at the character. */
+  code?: string;
   metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
@@ -64,6 +67,9 @@ export interface ShortcutContext {
 export function resolveShortcut(e: KeyLike, ctx: ShortcutContext): Shortcut | null {
   const mod = e.metaKey || e.ctrlKey;
   const key = e.key;
+  // Shift+1 is "!" in `key`; bindings on a digit check the physical key. Tests
+  // pass it explicitly; real events carry it.
+  const digit = e.code?.startsWith("Digit") ? e.code.slice(5) : key;
 
   if (key === "F9") return { kind: "settings" };
   if (mod && key === "F12") return { kind: "big-toolbar" };
@@ -97,19 +103,33 @@ export function resolveShortcut(e: KeyLike, ctx: ShortcutContext): Shortcut | nu
   // The rest all act on the selection.
   if (!ctx.hasSelection) return null;
 
-  // Alt+Enter is the original's Properties binding.
-  if (e.altKey && !mod && key === "Enter") return { kind: "properties" };
+  // Cmd+Enter is the original's Properties binding: its action carries scMeta -
+  // the Command key - not Alt. Ctrl+Enter is the reveal, which is what the
+  // original binds to "Open containing folder". The two are told apart by which
+  // modifier is held, so neither key can be mistaken for the other.
+  if (!e.altKey && !e.shiftKey && key === "Enter") {
+    if (e.metaKey && !e.ctrlKey) return { kind: "properties" };
+    if (e.ctrlKey && !e.metaKey) return { kind: "reveal" };
+  }
 
-  // Cmd/Ctrl + PgUp/PgDn move within the queue; Shift takes it to the ends.
+  // Ctrl+1 / Ctrl+2 move within the queue and Ctrl+Shift+1 / Ctrl+Shift+2 take
+  // it to the ends: the four keys the original's queue actions carry. Only Ctrl
+  // is claimed, so Cmd+1 / Cmd+2 stay with the system.
+  if (e.ctrlKey && !e.metaKey && !e.altKey && (digit === "1" || digit === "2")) {
+    const up = digit === "1";
+    const far = e.shiftKey;
+    const value = up ? (far ? "queue_top" : "queue_up") : far ? "queue_bottom" : "queue_down";
+    return { kind: "action", value };
+  }
+
+  // PgUp/PgDn do the same thing as an extra. They are not the original's keys,
+  // but they are the ones a list this long invites, and they take nothing away.
   if (mod && !e.altKey && (key === "PageUp" || key === "PageDown")) {
     const up = key === "PageUp";
     const far = e.shiftKey;
     const value = up ? (far ? "queue_top" : "queue_up") : far ? "queue_bottom" : "queue_down";
     return { kind: "action", value };
   }
-
-  // Cmd/Ctrl+Enter reveals the download folder, as the original does.
-  if (mod && !e.altKey && !e.shiftKey && key === "Enter") return { kind: "reveal" };
 
   // Function keys with no modifier, plus Shift+F3: the original's force start
   // (start now, ignoring the queue). The Ctrl+F3/F4 "all torrents" pair is

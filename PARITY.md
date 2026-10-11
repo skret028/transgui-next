@@ -98,7 +98,7 @@ implemented.
 | The tray menu | `pmTray` | **Done** — show and hide the window, start and stop every torrent, one submenu per direction for the speed limits, the alternative-speed toggle, quit. The original's tray is not its application menu: `pmTray` is its own eleven-item list, and this mirrors it item for item. The two speed submenus are filled from the list the toolbar uses rather than from the original's per-connection `DownSpeeds`/`UpSpeeds` setting, so the tray cannot offer a speed the button beside it does not |
 | About / help menu | `about.pas` | **Done** — a native Help menu with check for new version, home page, development site and About, plus an About panel in the app menu where macOS expects it |
 | History of download/move directories | `folderhistory.pas` | **Done** — the Add dialog's directory field offers the last 10 (newest first, de-duplicated); kept beside the settings file, not in the exported settings |
-| Keyboard shortcuts beyond select-all | the original's `ShortCut` codes | **Done** — the original's bindings key by key: F2 rename, F3/F4 start/stop, Shift+F3 force start, Ctrl+F3/F4 start/stop everything, F6 move data, F8 alternative speeds, Del remove, Alt/Cmd/Shift+Del remove with data, Ins add torrent, F7 labels, Alt+Enter properties, Ctrl+H/N/L priority, Ctrl+I don't download, Ctrl+R reannounce, Ctrl+PgUp/PgDn queue moves (Shift for the ends), Ctrl+Enter show the folder, F9 settings, Ctrl+F12 big toolbar, Ctrl+A select all (`src/shortcuts.ts`, 65 assertions) |
+| Keyboard shortcuts beyond select-all | the original's `ShortCut` codes | **Done** — the original's bindings key by key: F2 rename, F3/F4 start/stop, Shift+F3 force start, Ctrl+F3/F4 start/stop everything, F6 move data, F8 alternative speeds, Del remove, Alt/Cmd/Shift+Del remove with data, Ins add torrent, F7 labels, Ctrl+Enter show the folder, Ctrl+H/N/L priority, Ctrl+I don't download, Ctrl+R reannounce, Ctrl+1/Ctrl+2 queue moves (with Ctrl+Shift+1/Ctrl+Shift+2 for the ends), Cmd+Enter properties, F9 settings, Ctrl+F12 big toolbar, Ctrl+A select all (`src/shortcuts.ts`, 71 assertions). Two of these were misread from the original on the first pass and are corrected here: Properties is Cmd+Enter (that action carries `scMeta`, not Alt) and the queue moves are the Ctrl+1/Ctrl+2 pair, not PgUp/PgDn. PgUp/PgDn are kept as an extra, since they take nothing away |
 | Rename, and "Set data location…" | `acRename`, `acMoveTorrent`, `movetorrent.lfm` | **Done** — F2 renames the selected torrent and F6 opens the original's data-location dialog: the destination starts at where the data is now, with the recent-directory history and a Browse button beside it, and "move the torrent data from the current location to the new location" starts checked, so the files are moved. Unchecked, only the recorded location changes. The rename goes over as `torrent-rename-path` for the torrent's root, so the folder on disk is renamed with it. Both are in the row menu as well, where the original keeps its "Rename" and "Set data location…" items |
 | Native folder picker when adding a torrent | `Select a folder for download` | **Done** — a Browse button opens the native directory picker; the path is sent as text (it is a path on this machine, not the daemon's) |
 | Group the filter pane by tracker or folder | `Tracker grouping`, `Folder grouping` | **Done** — status, label, download directory and tracker |
@@ -141,6 +141,38 @@ implemented.
   names everywhere - the files list, the Add dialog's "Save as" - so there is
   one way to rename something rather than two. What the key does is unchanged:
   renames whatever is selected.
+
+## Not implemented
+
+Found by a second, mechanical pass over the original: every action, every dialog
+control and every RPC call on one side, and the equivalent on the other. The list
+above survived that pass with two corrections (the Properties and queue-move
+keys, both noted in the shortcut row). These did not survive it, and none of them
+is a deliberate departure - they are simply still missing.
+
+- **Being the system's magnet / `.torrent` handler.** The original ships
+  `urllistenerosx.pas` and an option ("Handle magnet links by %s") that makes the
+  application the one a `magnet:` link opens, and forwards whatever arrives. This
+  rewrite takes a link pasted into the Add dialog and reads one off the clipboard
+  when that setting is on, but it cannot yet be the registered handler.
+- **Deleting the local `.torrent` after a successful add.** The original's
+  `Interface/DeleteTorrentFile` client option. The rewrite has the daemon's
+  `trash-original-torrent-files` setting, which is not the same thing: the daemon
+  never has the local file, because what goes to it is the metainfo.
+- **The data refresh interval.** The original has two - the normal one and a
+  second for when the window is minimized. The rewrite polls at a fixed 2 s and
+  makes only the hidden-window interval settable.
+- **The update-check interval** ("Check for new version every N days"): the
+  rewrite checks when asked to, not on a schedule.
+- **SOCKS 5** for the connection's proxy; the rewrite's proxy is HTTP(S).
+- **Reordering the columns.** The original's `colsetup` has Up/Down buttons; the
+  rewrite's picker shows columns in the order they were ticked, which cannot say
+  "this one before that one".
+- **Renaming a saved connection.** Connections can be saved and deleted; a name
+  is taken when saving and saving under a name that is already there replaces
+  that entry, but there is no rename as the original's connection manager has.
+- **The licence tab** of the About dialog; the rewrite's native About panel
+  shows the version, the author and the links.
 
 ## Ahead of the original
 

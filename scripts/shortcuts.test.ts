@@ -18,6 +18,12 @@ function key(k: string, mods: Partial<KeyLike> = {}): KeyLike {
   return { key: k, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods };
 }
 
+/** A physical digit press, the way a browser reports it: Shift+1 is key "!". */
+function digitPress(n: number, mods: Partial<KeyLike> = {}): KeyLike {
+  const shifted = !!mods.shiftKey;
+  return key(shifted ? "!@"[n - 1] : String(n), { code: `Digit${n}`, ...mods });
+}
+
 const list: ShortcutContext = {
   typing: false,
   connected: true,
@@ -187,21 +193,51 @@ eq(
   null,
   "a queue move needs a selection",
 );
-eq(
-  resolveShortcut(key("Enter", { altKey: true }), list),
-  { kind: "properties" },
-  "Alt+Enter opens properties",
-);
+// Properties is Cmd+Enter in the original - that action carries scMeta - and
+// the reveal is Ctrl+Enter. Two separate keys, not two ways to reach one.
 eq(
   resolveShortcut(key("Enter", { metaKey: true }), list),
-  { kind: "reveal" },
-  "Cmd+Enter shows the download folder",
+  { kind: "properties" },
+  "Cmd+Enter opens properties",
 );
+eq(
+  resolveShortcut(key("Enter", { ctrlKey: true }), list),
+  { kind: "reveal" },
+  "Ctrl+Enter shows the download folder",
+);
+eq(resolveShortcut(key("Enter", { altKey: true }), list), null, "Alt+Enter is not a binding");
 eq(
   resolveShortcut(key("Enter", { ctrlKey: true, shiftKey: true }), list),
   null,
   "Ctrl+Shift+Enter is not a binding",
 );
+
+// The queue moves the original binds: Ctrl+1 / Ctrl+2, and Ctrl+Shift+1 /
+// Ctrl+Shift+2 for the ends of the queue. Cmd+1 / Cmd+2 stay with the system.
+// These use the shape a browser really sends, where Shift+1 is key "!" - the
+// first version of this binding matched on the character and silently did
+// nothing for the two shifted ones.
+eq(
+  resolveShortcut(digitPress(1, { ctrlKey: true }), list),
+  { kind: "action", value: "queue_up" },
+  "Ctrl+1 moves up the queue",
+);
+eq(
+  resolveShortcut(digitPress(2, { ctrlKey: true }), list),
+  { kind: "action", value: "queue_down" },
+  "Ctrl+2 moves down the queue",
+);
+eq(
+  resolveShortcut(digitPress(1, { ctrlKey: true, shiftKey: true }), list),
+  { kind: "action", value: "queue_top" },
+  "Ctrl+Shift+1 moves to the top",
+);
+eq(
+  resolveShortcut(digitPress(2, { ctrlKey: true, shiftKey: true }), list),
+  { kind: "action", value: "queue_bottom" },
+  "Ctrl+Shift+2 moves to the bottom",
+);
+eq(resolveShortcut(digitPress(1, { metaKey: true }), list), null, "Cmd+1 is left to the system");
 eq(
   resolveShortcut(key("i", { ctrlKey: true }), list),
   { kind: "set-not-download" },
@@ -213,7 +249,7 @@ eq(
   "Shift+Delete removes with data, as the original binds it",
 );
 eq(
-  resolveShortcut(key("Enter", { altKey: true }), ctx({ hasSelection: false })),
+  resolveShortcut(key("Enter", { metaKey: true }), ctx({ hasSelection: false })),
   null,
   "properties needs a selection",
 );
