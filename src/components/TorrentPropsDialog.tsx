@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
+import { trackerPatch, type Tracker } from "../trackers";
 import type { TorrentDetail } from "../types";
 
 interface Props {
@@ -23,6 +24,8 @@ interface Fields {
   idleLimit: string;
   queuePos: string;
   honorsSession: boolean;
+  /** The tracker box: one announce URL per line, as the original's memo is. */
+  trackers: string;
 }
 
 const numStr = (v: unknown) => (v == null ? "" : String(v));
@@ -41,6 +44,7 @@ function fromDetail(d: TorrentDetail): Fields {
     idleLimit: numStr(d.seedIdleLimit),
     queuePos: numStr(d.queuePosition ?? 0),
     honorsSession: d.honorSessionLimits ?? true,
+    trackers: (d.trackers ?? []).map((tr) => tr.announce).join("\n"),
   };
 }
 
@@ -70,6 +74,8 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
   const [name, setName] = useState("");
+  /** The trackers as the daemon reported them, to diff the box against. */
+  const [base, setBase] = useState<Tracker[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -82,6 +88,7 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
           return;
         }
         setName(d.name);
+        setBase(d.trackers ?? []);
         setFields(fromDetail(d));
       } catch (e) {
         setError(String(e));
@@ -98,7 +105,10 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
     setBusy(true);
     setError("");
     try {
-      await onApply(toPatch(fields));
+      // The tracker box is diffed rather than sent whole: the daemon takes
+      // additions, replacements and removals as three separate arrays, and a
+      // tracker that did not change must not be rewritten.
+      await onApply({ ...toPatch(fields), ...trackerPatch(base, fields.trackers) });
     } catch (e) {
       setError(String(e));
     } finally {
@@ -232,6 +242,17 @@ export function TorrentPropsDialog({ id, onLoad, onClose, onApply }: Props) {
               value={fields.idleLimit}
               onChange={(e) => set("idleLimit", e.target.value)}
               disabled={fields.idleMode !== "1"}
+            />
+          </label>
+
+          <div className="group">{t("Trackers")}</div>
+          <label className="field">
+            <span>{t("One tracker URL per line")}</span>
+            <textarea
+              rows={5}
+              spellCheck={false}
+              value={fields.trackers}
+              onChange={(e) => set("trackers", e.target.value)}
             />
           </label>
         </div>

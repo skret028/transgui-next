@@ -9,6 +9,8 @@ interface Props {
   context?: string;
   initial?: string;
   placeholder?: string;
+  /** Mask what is typed - used for the password prompt. */
+  secret?: boolean;
   submitLabel?: string;
   onClose: () => void;
   onSubmit: (value: string) => Promise<void>;
@@ -21,6 +23,7 @@ export function PromptDialog({
   context,
   initial = "",
   placeholder,
+  secret = false,
   submitLabel,
   onClose,
   onSubmit,
@@ -68,6 +71,7 @@ export function PromptDialog({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={placeholder}
+          type={secret ? "password" : undefined}
           onKeyDown={(e) => e.key === "Enter" && void submit()}
           autoFocus
         />

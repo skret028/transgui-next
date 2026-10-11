@@ -641,5 +641,10 @@
   "Free space": "可用空间",
   "Start after adding": "加入后开始",
   "The file list appears once the metadata has arrived.": "元数据到达后才会显示文件列表。",
-  "The daemon did not accept the torrent": "daemon 没有接受这个种子"
+  "The daemon did not accept the torrent": "daemon 没有接受这个种子",
+  "One tracker URL per line": "每行一个 Tracker 地址",
+  "Modify trackers…": "修改 Tracker…",
+  "Connect to {host}": "连接到 {host}",
+  "Please enter a password to connect to {host}:": "请输入连接到 {host} 的密码：",
+  "Still not authorised - check the password": "仍未通过验证，请检查密码"
 }

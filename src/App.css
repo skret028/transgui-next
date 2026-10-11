@@ -726,7 +726,8 @@ table.sub-table td.empty {
   font-size: calc(12px * var(--ui-scale));
 }
 .field input,
-.field select {
+.field select,
+.field textarea {
   background: #14171b;
   border: 1px solid #363c46;
   border-radius: 6px;
@@ -736,8 +737,15 @@ table.sub-table td.empty {
   width: 100%;
 }
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: #3b82f6;
+}
+/* The tracker box: a list of URLs, so monospace and only vertically stretchable. */
+.field textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(12px * var(--ui-scale));
+  resize: vertical;
 }
 .field input:disabled {
   opacity: 0.5;

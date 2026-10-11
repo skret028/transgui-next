@@ -89,6 +89,7 @@ import { filePatchAll } from "./filePriority";
 import { formatBytes } from "./format";
 import { resolveShortcut } from "./shortcuts";
 import { AddTorrentDialog, type AddChoices } from "./components/AddTorrentDialog";
+import { PromptDialog } from "./components/PromptDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
 import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
@@ -109,6 +110,15 @@ const REFRESH_MS = 2000;
 /** How often the opt-in clipboard watcher looks for a new torrent link. */
 const CLIPBOARD_MS = 2000;
 
+/**
+ * Whether a failure from the daemon was an authentication one.
+ *
+ * The daemon answers 401 and the backend turns that into one sentence; there is
+ * no error code carried across, so the message is what there is to go on. Kept
+ * in one place so there is one thing to change if that ever becomes a code.
+ */
+const isAuthError = (e: unknown) => /401|unauthor|未授权/i.test(String(e));
+
 function AppInner() {
   const t = useT();
   const { locale, setLocale } = useI18n();
@@ -117,6 +127,8 @@ function AppInner() {
   const [connecting, setConnecting] = useState(false);
   const [version, setVersion] = useState("");
   const [error, setError] = useState("");
+  /** Set when the daemon refused the credentials, to ask for a new password. */
+  const [authPrompt, setAuthPrompt] = useState(false);
   /** Transient green confirmation (e.g. "Copied"); cleared on a timer. */
   const [notice, setNotice] = useState("");
   /** Where the torrent list's context menu is open, if it is. */
@@ -293,7 +305,7 @@ function AppInner() {
   }, []);
 
   const connect = useCallback(
-    async (override?: ConnForm) => {
+    async (override?: ConnForm): Promise<boolean> => {
       const cfg = override ?? form;
       setConnecting(true);
       setError("");
@@ -303,9 +315,15 @@ function AppInner() {
         setVersion(`${res.version} (rpc v${res.rpcVersion})`);
         void saveConnForm(cfg);
         await refresh();
+        return true;
       } catch (e) {
         setConnected(false);
         setError(String(e));
+        // A 401 means the daemon is there and the credentials are not. Ask
+        // rather than retrying the same password, which is what the reconnect
+        // below would otherwise do - slowly, and for ever.
+        if (isAuthError(e)) setAuthPrompt(true);
+        return false;
       } finally {
         setConnecting(false);
       }
@@ -410,7 +428,10 @@ function AppInner() {
   }, [connected]);
 
   useEffect(() => {
-    if (!autoReconnect || connected || !everConnected.current) return;
+    // The password prompt stands in for the reconnect while it is open: the
+    // retry it offers is the same one this loop would make, only with a
+    // password that might work.
+    if (!autoReconnect || connected || authPrompt || !everConnected.current) return;
     let cancelled = false;
     let delay = 1000;
     let timer = 0;
@@ -430,7 +451,7 @@ function AppInner() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [autoReconnect, connected, connect]);
+  }, [autoReconnect, connected, connect, authPrompt]);
 
   const onRowClick = useCallback(
     (id: number, e: MouseEvent) => {
@@ -593,6 +614,7 @@ function AppInner() {
     { id: null, labelKey: "" },
     { id: "labels", labelKey: "Labels" },
     { id: "props", labelKey: "Properties" },
+    { id: "trackers", labelKey: "Modify trackers…" },
     { id: null, labelKey: "" },
     { id: "remove", labelKey: "Remove" },
     { id: "remove_with_data", labelKey: "Remove and delete data", danger: true },
@@ -618,7 +640,9 @@ function AppInner() {
         setShowLabels(true);
         return;
       }
-      if (act === "props") {
+      if (act === "props" || act === "trackers") {
+        // The original's "Modify trackers…" is this dialog: the tracker box
+        // lives in it, and it acts on the torrent that was pointed at.
         setShowProps(true);
         return;
       }
@@ -1733,6 +1757,27 @@ function AppInner() {
           onApply={applyPreparedAdd}
           onDiscard={discardPreparedAdd}
           dirHistory={dirHistory}
+        />
+      )}
+
+      {authPrompt && (
+        <PromptDialog
+          title={t("Connect to {host}", { host: form.host })}
+          label={t("Please enter a password to connect to {host}:", { host: form.host })}
+          secret
+          placeholder={t("Password")}
+          submitLabel={t("Connect")}
+          onClose={() => setAuthPrompt(false)}
+          onSubmit={async (password) => {
+            const next = { ...form, password };
+            setForm(next);
+            const ok = await connect(next);
+            // Stay open until the password actually works: a refusal is
+            // something to correct, not to retype from a closed dialog. The
+            // prompt's own onClose would otherwise clear the flag the failed
+            // connect just set.
+            if (!ok) throw new Error(t("Still not authorised - check the password"));
+          }}
         />
       )}
 
