@@ -22,6 +22,7 @@ export const DEFAULT_FORM: ConnForm = {
   proxyPort: "",
   proxyUsername: "",
   proxyPassword: "",
+  socks5: false,
 };
 
 let storePromise: Promise<Store> | null = null;
@@ -385,5 +386,70 @@ export async function loadDirHistory(): Promise<string[]> {
 export async function saveDirHistory(list: string[]): Promise<void> {
   const store = await getStore();
   await store.set(DIR_HISTORY_KEY, list);
+  await store.save();
+}
+
+const REFRESH_SECONDS_KEY = "refreshSeconds";
+
+/** How often to poll the daemon while the window is visible, in seconds. */
+export async function loadRefreshSeconds(): Promise<number> {
+  try {
+    const store = await getStore();
+    return (await store.get<number>(REFRESH_SECONDS_KEY)) ?? 2;
+  } catch {
+    return 2;
+  }
+}
+
+export async function saveRefreshSeconds(seconds: number): Promise<void> {
+  const store = await getStore();
+  await store.set(REFRESH_SECONDS_KEY, seconds);
+  await store.save();
+}
+
+const DELETE_TORRENT_FILE_KEY = "deleteTorrentFileAfterAdd";
+
+/**
+ * Delete the local `.torrent` file once the daemon has accepted it.
+ *
+ * This is the client's own option, not the daemon's `trash-original-torrent-files`:
+ * the daemon never sees the file, because what goes to it is the metainfo. Off by
+ * default, as the original has it.
+ */
+export async function loadDeleteTorrentFile(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(DELETE_TORRENT_FILE_KEY)) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export async function saveDeleteTorrentFile(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(DELETE_TORRENT_FILE_KEY, on);
+  await store.save();
+}
+
+const UPDATE_CHECK_DAYS_KEY = "updateCheckDays";
+const UPDATE_CHECK_LAST_KEY = "updateCheckLast";
+
+/** How often to check for a new version. 0 turns the check off. */
+export async function loadUpdateCheck(): Promise<{ days: number; last: string }> {
+  try {
+    const store = await getStore();
+    return {
+      days: (await store.get<number>(UPDATE_CHECK_DAYS_KEY)) ?? 0,
+      last: (await store.get<string>(UPDATE_CHECK_LAST_KEY)) ?? "",
+    };
+  } catch {
+    return { days: 0, last: "" };
+  }
+}
+
+export async function saveUpdateCheck(days: number, last: string): Promise<void> {
+  const store = await getStore();
+  await store.set(UPDATE_CHECK_DAYS_KEY, days);
+  await store.set(UPDATE_CHECK_LAST_KEY, last);
   await store.save();
 }

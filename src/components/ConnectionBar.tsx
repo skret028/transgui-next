@@ -20,6 +20,7 @@ interface Props {
   onDisconnect: () => void;
   onSelectServer: (id: string) => void;
   onSaveServer: (name: string) => void;
+  onRenameServer: (id: string, name: string) => void;
   onDeleteServer: (id: string) => void;
 }
 
@@ -34,22 +35,33 @@ export function ConnectionBar({
   onDisconnect,
   onSelectServer,
   onSaveServer,
+  onRenameServer,
   onDeleteServer,
 }: Props) {
   const t = useT();
   const locked = connected;
-  const [naming, setNaming] = useState(false);
+  const [naming, setNaming] = useState<"save" | "rename" | null>(null);
   const [name, setName] = useState("");
 
   const startSave = () => {
     setName(`${form.host}:${form.port}`);
-    setNaming(true);
+    setNaming("save");
   };
 
-  const confirmSave = () => {
+  const startRename = () => {
+    const current = servers.find((s) => s.id === selectedServerId);
+    if (!current) return;
+    setName(current.name);
+    setNaming("rename");
+  };
+
+  const confirmName = () => {
     const trimmed = name.trim();
-    if (trimmed) onSaveServer(trimmed);
-    setNaming(false);
+    if (trimmed) {
+      if (naming === "rename") onRenameServer(selectedServerId, trimmed);
+      else onSaveServer(trimmed);
+    }
+    setNaming(null);
   };
 
   return (
@@ -75,14 +87,14 @@ export function ConnectionBar({
             className="narrow-wide"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && confirmSave()}
+            onKeyDown={(e) => e.key === "Enter" && confirmName()}
             placeholder={t("Server name")}
             autoFocus
           />
-          <button className="btn primary" onClick={confirmSave}>
+          <button className="btn primary" onClick={confirmName}>
             {t("Save")}
           </button>
-          <button className="btn" onClick={() => setNaming(false)}>
+          <button className="btn" onClick={() => setNaming(null)}>
             {t("Cancel")}
           </button>
         </>
@@ -90,6 +102,14 @@ export function ConnectionBar({
         <>
           <button className="btn" onClick={startSave} title={t("Bookmark the current connection")}>
             {t("Bookmark…")}
+          </button>
+          <button
+            className="btn"
+            onClick={startRename}
+            disabled={!selectedServerId}
+            title={t("Rename the selected server")}
+          >
+            {t("Rename")}
           </button>
           <button
             className="btn"
@@ -215,6 +235,15 @@ export function ConnectionBar({
           onChange={(e) => onChange("proxyPassword", e.target.value)}
           disabled={locked || !form.proxyEnabled}
         />
+      </label>
+      <label className="chk">
+        <input
+          type="checkbox"
+          checked={form.socks5}
+          onChange={(e) => onChange("socks5", e.target.checked)}
+          disabled={locked || !form.proxyEnabled}
+        />
+        SOCKS 5
       </label>
       {connected ? (
         <button className="btn danger" onClick={onDisconnect}>

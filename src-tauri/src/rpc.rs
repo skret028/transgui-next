@@ -45,6 +45,10 @@ pub struct ConnConfig {
     pub proxy_username: Option<String>,
     #[serde(default)]
     pub proxy_password: Option<String>,
+    /// Send the daemon's host name to the proxy for it to resolve, SOCKS 5
+    /// style, instead of sending the address of the HTTP proxy itself.
+    #[serde(default)]
+    pub socks5: Option<bool>,
 }
 
 /// Some(path) unless the field is empty, so "unset" and "" behave the same.
@@ -83,14 +87,23 @@ fn build_client(config: &ConnConfig) -> Result<reqwest::Client, String> {
         (None, None) => {}
         _ => return Err("客户端证书和私钥必须同时指定，或同时留空".into()),
     }
-    // HTTP proxy. The daemon is reached through it, so it is configured for both
+    // Proxy. The daemon is reached through it, so it is configured for both
     // schemes — an https daemon then goes through CONNECT. Credentials are
     // attached separately rather than embedded in the URL, so a password
     // containing '@', ':' or '/' cannot corrupt the proxy address.
+    //
+    // SOCKS 5 uses the same host, port and credentials; only the scheme
+    // changes, and it is the "h" form so the proxy resolves the daemon's name
+    // the way the original's SOCKS layer does.
     if config.proxy_enabled.unwrap_or(false) {
         let host = nonempty(&config.proxy_host).ok_or_else(|| "未指定代理服务器".to_string())?;
         let port = config.proxy_port.unwrap_or(8080);
-        let mut proxy = reqwest::Proxy::all(format!("http://{host}:{port}"))
+        let scheme = if config.socks5.unwrap_or(false) {
+            "socks5h"
+        } else {
+            "http"
+        };
+        let mut proxy = reqwest::Proxy::all(format!("{scheme}://{host}:{port}"))
             .map_err(|e| format!("代理地址无效：{e}"))?;
         if let Some(user) = nonempty(&config.proxy_username) {
             let password = config.proxy_password.clone().unwrap_or_default();
@@ -817,6 +830,7 @@ mod tests {
             proxy_port: None,
             proxy_username: None,
             proxy_password: None,
+            socks5: None,
         }
     }
 
@@ -868,6 +882,17 @@ mod tests {
             ..base_config()
         };
         assert!(build_client(&no_credentials).is_ok(), "a password without a user is harmless");
+
+        // SOCKS 5 is the same host and port with a different scheme; it must
+        // build too, and it is the scheme that selects SOCKS at all.
+        let via_socks = ConnConfig {
+            proxy_enabled: Some(true),
+            proxy_host: Some("proxy.example.com".into()),
+            proxy_port: Some(1080),
+            socks5: Some(true),
+            ..base_config()
+        };
+        assert!(build_client(&via_socks).is_ok(), "a SOCKS 5 proxy builds");
     }
 
     /// The proxy path end to end.
@@ -917,6 +942,7 @@ mod tests {
             proxy_port: Some(proxy_port),
             proxy_username: None,
             proxy_password: None,
+            socks5: None,
         };
 
         let state = AppState::new();
@@ -976,6 +1002,7 @@ mod tests {
             proxy_port: None,
             proxy_username: None,
             proxy_password: None,
+            socks5: None,
         };
         let client = build_client(&config).expect("client with identity");
         let call = serde_json::json!({"method": "session-get"});

@@ -42,6 +42,7 @@ export const rpc = {
         proxy_port: form.proxyPort ? Number(form.proxyPort) : null,
         proxy_username: form.proxyUsername,
         proxy_password: form.proxyPassword,
+        socks5: form.socks5,
       },
     }),
 
@@ -102,6 +103,7 @@ export const rpc = {
   /** Reveal a path in the OS file manager (only meaningful for a local daemon). */
   revealPath: (path: string) => invoke<unknown>("rpc_reveal_path", { path }),
   openPath: (path: string) => invoke<unknown>("rpc_open_path", { path }),
+  removeFile: (path: string) => invoke<unknown>("rpc_remove_file", { path }),
 
   /** Settings export/import: plain text files at paths the user picked. */
   writeTextFile: (path: string, contents: string) =>

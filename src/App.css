@@ -950,3 +950,32 @@ table.sub-table td.empty {
 .speed-select:focus {
   border-color: #3b82f6;
 }
+
+.col-order {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.col-order li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+.col-order-name {
+  flex: 1;
+}
+.col-order .btn {
+  padding: 1px 8px;
+}
+.license-text {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 50vh;
+  overflow-y: auto;
+}

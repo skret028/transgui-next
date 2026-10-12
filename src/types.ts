@@ -123,6 +123,8 @@ export interface ConnForm {
   proxyPort: string;
   proxyUsername: string;
   proxyPassword: string;
+  /** The proxy is SOCKS 5 rather than HTTP(S), as the original offers. */
+  socks5: boolean;
 }
 
 /** A saved server/connection bookmark. */
@@ -151,6 +153,9 @@ export interface PreparedAdd {
   hasMetadata: boolean;
   /** Where the daemon put it, for the free-space line. */
   downloadDir: string;
+  /** The local `.torrent` this add came from, if it came from a file rather
+   *  than a link. Only used to delete it afterwards, when that is asked for. */
+  localPath?: string;
 }
 
 export interface AddTorrentOptions {

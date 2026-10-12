@@ -147,32 +147,54 @@ implemented.
 Found by a second, mechanical pass over the original: every action, every dialog
 control and every RPC call on one side, and the equivalent on the other. The list
 above survived that pass with two corrections (the Properties and queue-move
-keys, both noted in the shortcut row). These did not survive it, and none of them
-is a deliberate departure - they are simply still missing.
+keys, both noted in the shortcut row). Seven of the eight gaps it turned up have
+since been closed - each was driven through the real UI and read back from the
+daemon or the settings file - leaving one:
 
 - **Being the system's magnet / `.torrent` handler.** The original ships
   `urllistenerosx.pas` and an option ("Handle magnet links by %s") that makes the
   application the one a `magnet:` link opens, and forwards whatever arrives. This
   rewrite takes a link pasted into the Add dialog and reads one off the clipboard
-  when that setting is on, but it cannot yet be the registered handler.
-- **Deleting the local `.torrent` after a successful add.** The original's
-  `Interface/DeleteTorrentFile` client option. The rewrite has the daemon's
-  `trash-original-torrent-files` setting, which is not the same thing: the daemon
-  never has the local file, because what goes to it is the metainfo.
-- **The data refresh interval.** The original has two - the normal one and a
-  second for when the window is minimized. The rewrite polls at a fixed 2 s and
-  makes only the hidden-window interval settable.
-- **The update-check interval** ("Check for new version every N days"): the
-  rewrite checks when asked to, not on a schedule.
-- **SOCKS 5** for the connection's proxy; the rewrite's proxy is HTTP(S).
-- **Reordering the columns.** The original's `colsetup` has Up/Down buttons; the
-  rewrite's picker shows columns in the order they were ticked, which cannot say
-  "this one before that one".
-- **Renaming a saved connection.** Connections can be saved and deleted; a name
-  is taken when saving and saving under a name that is already there replaces
-  that entry, but there is no rename as the original's connection manager has.
-- **The licence tab** of the About dialog; the rewrite's native About panel
-  shows the version, the author and the links.
+  when that setting is on, but it cannot yet be the registered handler: that
+  needs a URL scheme in the bundle's `Info.plist` and the hand-off plumbed
+  through, which is a packaging job rather than a UI one.
+
+## Closed since the audit
+
+Each of these is now in the rewrite, with the same two-halves shape the original
+uses:
+
+- **Deleting the local `.torrent` after a successful add** - the original's
+  `Interface/DeleteTorrentFile`, kept client-side for the reason above: the
+  daemon never sees the file. Off by default; a file that cannot be removed says
+  so in the notice line rather than failing the add.
+- **The data refresh interval** - the normal one is now settable (seconds), and
+  the toolbar's "Auto Ns" label follows it instead of a fixed 2 s. The minimized
+  interval was already there.
+- **The update-check interval** ("Check for new version every N days") - a pure
+  `updateCheckDue` decides whether a check is owed, so a machine that was asleep
+  for a week checks once on waking rather than skipping it. 0 leaves it to the
+  button.
+- **SOCKS 5** - the same host, port and credentials as the HTTP proxy, with the
+  scheme selected by the checkbox. This needed `reqwest`'s `socks` feature, which
+  the crate was not built with: without it the option was accepted and silently
+  unusable.
+- **Reordering the columns** - the picker gained the original's Up/Down half,
+  and `normalizeColumns` no longer re-sorts a saved order back into registry
+  order (which had made the buttons a no-op).
+- **Renaming a saved connection** - beside Save and Delete, with a name another
+  entry holds refused rather than silently swallowed.
+- **The licence notice** - as a Help-menu item next to About rather than a tab of
+  it, because the About panel is the platform's own. The text is not translated.
+
+Two bugs the closed-loop checks turned up on the way, both fixed:
+
+- Pressing **Disconnect** was undone within a second by the auto-reconnect loop.
+  The original stops its refresh timers on an explicit disconnect, so it stays
+  disconnected; the loop here now knows the difference between a connection that
+  dropped and one the user ended.
+- The **column order** bug above, found because the settings file did not change
+  after Apply.
 
 ## Ahead of the original
 

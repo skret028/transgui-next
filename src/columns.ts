@@ -86,13 +86,20 @@ export const columnDef = (id: ColumnId): ColumnDef => BY_ID.get(id)!;
  * Coerce a persisted value into a usable column list.
  *
  * Unknown ids are dropped (a downgrade must not resurrect a removed column) and
- * the result is put back into registry order so the table layout is stable
- * regardless of the order the user ticked the boxes in.
+ * duplicates collapse, but the order is kept: it is the user's, set with the
+ * up/down buttons in the column dialog, and the table draws the columns in the
+ * order this returns. Defaults stand in only when nothing usable is left.
  */
 export function normalizeColumns(value: unknown): ColumnId[] {
   if (!Array.isArray(value)) return DEFAULT_COLUMNS;
-  const wanted = new Set(value.filter((v): v is ColumnId => typeof v === "string" && BY_ID.has(v as ColumnId)));
-  const ordered = ALL_COLUMNS.filter((c) => wanted.has(c.id)).map((c) => c.id);
-  // An empty selection would leave a table with nothing but checkboxes.
+  const seen = new Set<ColumnId>();
+  const ordered: ColumnId[] = [];
+  for (const v of value) {
+    if (typeof v !== "string" || !BY_ID.has(v as ColumnId)) continue;
+    const id = v as ColumnId;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ordered.push(id);
+  }
   return ordered.length > 0 ? ordered : DEFAULT_COLUMNS;
 }

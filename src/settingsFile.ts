@@ -54,6 +54,9 @@ export interface SafeSettings {
   smoothSpeeds: boolean;
   trayAlwaysVisible: boolean;
   autoReconnect: boolean;
+  refreshSeconds: number;
+  deleteTorrentFileAfterAdd: boolean;
+  updateCheckDays: number;
 }
 
 export interface SettingsFile extends SafeSettings {
@@ -105,6 +108,12 @@ function bool(value: unknown, fallback: boolean): boolean {
 }
 
 /** Only the three known sizes survive; anything else falls back to medium. */
+/** A whole number at or above `min`; anything else falls back. */
+function count(value: unknown, fallback: number, min: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(min, Math.floor(n)) : fallback;
+}
+
 function sanitizeFont(value: unknown): UiFontSize {
   return typeof value === "string" && FONT_SIZES.includes(value)
     ? (value as UiFontSize)
@@ -163,6 +172,7 @@ function stripForm(form: Partial<ConnForm> | undefined, fallback: Partial<ConnFo
     proxyHost: str(f.proxyHost),
     proxyPort: str(f.proxyPort),
     proxyUsername: str(f.proxyUsername),
+    socks5: !!f.socks5,
   };
 }
 
@@ -194,6 +204,9 @@ export function buildSettingsFile(
     smoothSpeeds: !!settings.smoothSpeeds,
     trayAlwaysVisible: settings.trayAlwaysVisible ?? DEFAULT_TRAY_ALWAYS_VISIBLE,
     autoReconnect: settings.autoReconnect ?? true,
+    refreshSeconds: count(settings.refreshSeconds, 2, 1),
+    deleteTorrentFileAfterAdd: !!settings.deleteTorrentFileAfterAdd,
+    updateCheckDays: count(settings.updateCheckDays, 0, 0),
   };
 }
 
@@ -295,6 +308,9 @@ export function parseSettingsFile(text: string): ImportResult {
   settings.smoothSpeeds = bool(objData.smoothSpeeds, DEFAULT_SMOOTH_SPEEDS);
   settings.trayAlwaysVisible = bool(objData.trayAlwaysVisible, DEFAULT_TRAY_ALWAYS_VISIBLE);
   settings.autoReconnect = bool(objData.autoReconnect, true);
+  settings.refreshSeconds = count(objData.refreshSeconds, 2, 1);
+  settings.deleteTorrentFileAfterAdd = bool(objData.deleteTorrentFileAfterAdd, false);
+  settings.updateCheckDays = count(objData.updateCheckDays, 0, 0);
 
   // A file that carries a password was probably hand-edited; say so rather than
   // silently dropping it, because the user may expect it to be applied.

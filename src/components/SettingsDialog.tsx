@@ -47,6 +47,15 @@ interface Props {
   /** Client-side: retry a dropped connection instead of waiting for a click. */
   autoReconnect: boolean;
   onAutoReconnectChange: (on: boolean) => void;
+  /** Client-side: how often to poll while the window is visible. */
+  refreshSeconds: number;
+  onRefreshSecondsChange: (seconds: number) => void;
+  /** Client-side: delete the local .torrent once the daemon has taken it. */
+  deleteTorrentFile: boolean;
+  onDeleteTorrentFileChange: (on: boolean) => void;
+  /** Client-side: how often to look for a new version. 0 turns it off. */
+  updateCheckDays: number;
+  onUpdateCheckDaysChange: (days: number) => void;
 }
 
 interface Fields {
@@ -287,6 +296,12 @@ export function SettingsDialog({
   onTrayAlwaysVisibleChange,
   autoReconnect,
   onAutoReconnectChange,
+  refreshSeconds,
+  onRefreshSecondsChange,
+  deleteTorrentFile,
+  onDeleteTorrentFileChange,
+  updateCheckDays,
+  onUpdateCheckDaysChange,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -900,6 +915,22 @@ export function SettingsDialog({
 
           <div className="kv-inline">
             <label className="chk">
+              <span>{t("Data refresh interval")}</span>
+            </label>
+            <input
+              className="narrow"
+              type="number"
+              min={1}
+              value={refreshSeconds}
+              onChange={(e) =>
+                onRefreshSecondsChange(Math.max(1, Math.floor(Number(e.target.value) || 1)))
+              }
+            />
+            <span className="muted">{t("seconds")}</span>
+          </div>
+
+          <div className="kv-inline">
+            <label className="chk">
               <input
                 type="checkbox"
                 checked={hiddenRefresh.enabled}
@@ -944,6 +975,18 @@ export function SettingsDialog({
           </label>
           <p className="muted">
             {t("Watches the clipboard for magnet or .torrent links and opens the Add dialog pre-filled — nothing is added until you confirm.")}
+          </p>
+
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={deleteTorrentFile}
+              onChange={(e) => onDeleteTorrentFileChange(e.target.checked)}
+            />
+            {t("Delete the .torrent file after a successful addition")}
+          </label>
+          <p className="muted">
+            {t("The file on this machine, not the daemon's own copy — the daemon is sent the metainfo and never sees it.")}
           </p>
 
           <label className="chk">
@@ -1091,6 +1134,21 @@ export function SettingsDialog({
               <span>{t("Updates")}</span>
             </div>
             <p className="muted">{t("Compare this build with the latest GitHub release.")}</p>
+            <div className="kv-inline">
+              <label className="chk">
+                <span>{t("Check for a new version every")}</span>
+              </label>
+              <input
+                className="narrow"
+                type="number"
+                min={0}
+                value={updateCheckDays}
+                onChange={(e) =>
+                  onUpdateCheckDaysChange(Math.max(0, Math.floor(Number(e.target.value) || 0)))
+                }
+              />
+              <span className="muted">{t("days (0 = never)")}</span>
+            </div>
             <div className="inline-actions">
               <button className="btn" disabled={updateBusy} onClick={() => void checkUpdates()}>
                 {updateBusy ? t("Checking…") : t("Check for updates")}

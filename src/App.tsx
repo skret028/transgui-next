@@ -14,32 +14,38 @@ import {
   loadColumns,
   loadConnForm,
   loadAutoReconnect,
+  loadDeleteTorrentFile,
   loadDirHistory,
   loadHiddenRefresh,
   loadLocale,
   loadMinimizeToTray,
   loadNotifyOnComplete,
   loadPathMap,
+  loadRefreshSeconds,
   loadServers,
   loadSmoothSpeeds,
   loadStatusBarFields,
   loadTrayAlwaysVisible,
   loadUiFontSize,
+  loadUpdateCheck,
   loadViewOptions,
   saveColumns,
   saveConnForm,
   saveAutoReconnect,
+  saveDeleteTorrentFile,
   saveDirHistory,
   saveHiddenRefresh,
   saveLocale,
   saveMinimizeToTray,
   saveNotifyOnComplete,
   savePathMap,
+  saveRefreshSeconds,
   saveServers,
   saveSmoothSpeeds,
   saveStatusBarFields,
   saveTrayAlwaysVisible,
   saveUiFontSize,
+  saveUpdateCheck,
   saveViewOptions,
   saveClipboardAutoAdd,
   type HiddenRefresh,
@@ -50,6 +56,7 @@ import {
 import { revealPathFor, type PathMapping } from "./paths";
 import { buildSettingsFile, parseSettingsFile } from "./settingsFile";
 import { SPEED_WINDOW, averagedSpeeds, sampleSpeeds, type SpeedHistory } from "./speedAverage";
+import { updateCheckDue } from "./updateCheck";
 import {
   ALL_SELECTION,
   filterTorrents,
@@ -94,6 +101,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { LabelsDialog } from "./components/LabelsDialog";
 import { TorrentPropsDialog } from "./components/TorrentPropsDialog";
 import { MoveLocationDialog } from "./components/MoveLocationDialog";
+import { LicenseDialog } from "./components/LicenseDialog";
 import { StatsDialog } from "./components/StatsDialog";
 import { ColumnsDialog } from "./components/ColumnsDialog";
 import { FilterPane } from "./components/FilterPane";
@@ -107,7 +115,6 @@ import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { extractTorrentLink, magnetLink, trackersFromMagnet } from "./torrentLink";
 import { copyText } from "./clipboard";
 
-const REFRESH_MS = 2000;
 /** How often the opt-in clipboard watcher looks for a new torrent link. */
 const CLIPBOARD_MS = 2000;
 
@@ -138,6 +145,8 @@ function AppInner() {
   const [renameOpen, setRenameOpen] = useState(false);
   /** The move-data dialog, reached by F6 or the row menu. */
   const [moveOpen, setMoveOpen] = useState(false);
+  /** The licence notice, from the Help menu. */
+  const [licenseOpen, setLicenseOpen] = useState(false);
   const [torrents, setTorrents] = useState<Torrent[]>([]);
 
   const [selection, setSelection] = useState<Set<number>>(new Set());
@@ -156,6 +165,14 @@ function AppInner() {
   const [uiFontSize, setUiFontSize] = useState<UiFontSize>("medium");
   const [statusFields, setStatusFields] = useState<StatusBarFields>(DEFAULT_STATUS_FIELDS);
   const [hiddenRefresh, setHiddenRefresh] = useState<HiddenRefresh>(DEFAULT_HIDDEN_REFRESH);
+  /** How often the list is reloaded while the window is visible, in seconds. */
+  const [refreshSeconds, setRefreshSeconds] = useState(2);
+  /** Delete the local `.torrent` once the daemon has accepted it. */
+  const [deleteTorrentFile, setDeleteTorrentFile] = useState(false);
+  /** Days between version checks; 0 leaves the check to the button. */
+  const [updateCheckDays, setUpdateCheckDays] = useState(0);
+  /** When the last version check ran, as it was read at startup. */
+  const updateCheckLast = useRef("");
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [viewOptions, setViewOptions] = useState<ViewOptions>(DEFAULT_VIEW_OPTIONS);
   /** Opt-in: pre-fill the Add dialog when a torrent link is copied. */
@@ -337,6 +354,7 @@ function AppInner() {
   );
 
   const disconnect = useCallback(async () => {
+    userDisconnected.current = true;
     await rpc.disconnect();
     setConnected(false);
     setTorrents([]);
@@ -359,6 +377,9 @@ function AppInner() {
       const savedFont = await loadUiFontSize();
       const savedStatusFields = await loadStatusBarFields();
       const savedHiddenRefresh = await loadHiddenRefresh();
+      const savedRefreshSeconds = await loadRefreshSeconds();
+      const savedDeleteTorrentFile = await loadDeleteTorrentFile();
+      const savedUpdateCheck = await loadUpdateCheck();
       const savedMinimizeToTray = await loadMinimizeToTray();
       const savedViewOptions = await loadViewOptions();
       const savedClipboardAuto = await loadClipboardAutoAdd();
@@ -375,6 +396,10 @@ function AppInner() {
       setUiFontSize(savedFont);
       setStatusFields(savedStatusFields);
       setHiddenRefresh(savedHiddenRefresh);
+      setRefreshSeconds(savedRefreshSeconds);
+      setDeleteTorrentFile(savedDeleteTorrentFile);
+      setUpdateCheckDays(savedUpdateCheck.days);
+      updateCheckLast.current = savedUpdateCheck.last;
       setMinimizeToTray(savedMinimizeToTray);
       minimizeToTrayRef.current = savedMinimizeToTray;
       void rpc.setCloseToTray(savedMinimizeToTray);
@@ -414,7 +439,7 @@ function AppInner() {
     const interval =
       documentHidden && hiddenRefresh.enabled
         ? Math.max(1, hiddenRefresh.seconds) * 1000
-        : REFRESH_MS;
+        : Math.max(1, refreshSeconds) * 1000;
     timer.current = window.setInterval(() => {
       void refresh();
       void refreshDetail();
@@ -422,12 +447,18 @@ function AppInner() {
     return () => {
       if (timer.current) window.clearInterval(timer.current);
     };
-  }, [connected, autoRefresh, documentHidden, hiddenRefresh, refresh, refreshDetail]);
+  }, [connected, autoRefresh, documentHidden, hiddenRefresh, refreshSeconds, refresh, refreshDetail]);
 
   // Auto-reconnect. Only after a connection has succeeded once: a first-run
   // dialog that was never filled in should not spin against a host that is
   // simply not configured yet.
   const everConnected = useRef(false);
+  /** Set when the user presses Disconnect, cleared when they connect again.
+   *
+   * The original stops its refresh timers on an explicit disconnect, so it
+   * stays disconnected; the auto-reconnect is for a connection that dropped on
+   * its own. Without this the retry loop here would undo the button at once. */
+  const userDisconnected = useRef(false);
   useEffect(() => {
     if (connected) everConnected.current = true;
   }, [connected]);
@@ -437,6 +468,7 @@ function AppInner() {
     // retry it offers is the same one this loop would make, only with a
     // password that might work.
     if (!autoReconnect || connected || authPrompt || !everConnected.current) return;
+    if (userDisconnected.current) return;
     let cancelled = false;
     let delay = 1000;
     let timer = 0;
@@ -819,6 +851,7 @@ function AppInner() {
           // exactly that case rather than showing an empty grid.
           hasMetadata: files.length > 0 || detail.metadataPercentComplete === 1,
           downloadDir: String(detail.downloadDir ?? ""),
+          localPath: options.local_torrent_path ?? undefined,
         };
       } catch (e) {
         setError(String(e));
@@ -845,13 +878,29 @@ function AppInner() {
         setSelection(new Set([prepared.id]));
         setShowAdd(false);
         setClipboardLink("");
+        // The original's client-side option, for adds that came from a file.
+        // The daemon never sees that file, so its own trash-original setting
+        // cannot do this. A failure here is not worth an error: the torrent is
+        // in, and the file simply stays.
+        if (deleteTorrentFile && prepared.localPath) {
+          try {
+            await rpc.removeFile(prepared.localPath);
+          } catch (e) {
+            // The torrent is in, so this is not an error; but the user asked
+            // for the file to go, and a file still sitting there afterwards
+            // should be said out loud rather than left to be discovered.
+            setNotice(
+              t("Could not delete the .torrent file: {error}", { error: String(e) }),
+            );
+          }
+        }
         await refresh();
         await refreshDetail();
       } catch (e) {
         setError(String(e));
       }
     },
-    [refresh, refreshDetail],
+    [deleteTorrentFile, refresh, refreshDetail],
   );
 
   /** Drop a torrent whose Add dialog was backed out of, as the original does. */
@@ -1020,6 +1069,21 @@ function AppInner() {
   const changeHiddenRefresh = useCallback((value: HiddenRefresh) => {
     setHiddenRefresh(value);
     void saveHiddenRefresh(value);
+  }, []);
+
+  const changeRefreshSeconds = useCallback((seconds: number) => {
+    setRefreshSeconds(seconds);
+    void saveRefreshSeconds(seconds);
+  }, []);
+
+  const changeDeleteTorrentFile = useCallback((on: boolean) => {
+    setDeleteTorrentFile(on);
+    void saveDeleteTorrentFile(on);
+  }, []);
+
+  const changeUpdateCheckDays = useCallback((days: number) => {
+    setUpdateCheckDays(days);
+    void saveUpdateCheck(days, updateCheckLast.current);
   }, []);
 
   const changeMinimizeToTray = useCallback((on: boolean) => {
@@ -1248,6 +1312,9 @@ function AppInner() {
       smoothSpeeds,
       trayAlwaysVisible,
       autoReconnect,
+      refreshSeconds,
+      deleteTorrentFileAfterAdd: deleteTorrentFile,
+      updateCheckDays,
     });
     const target = await save({
       defaultPath: "transgui-next-settings.json",
@@ -1346,6 +1413,10 @@ function AppInner() {
     if (s.statusBarFields !== undefined) changeStatusFields(s.statusBarFields);
     if (s.hiddenRefresh !== undefined) changeHiddenRefresh(s.hiddenRefresh);
     if (s.autoReconnect !== undefined) changeAutoReconnect(s.autoReconnect);
+    if (s.refreshSeconds !== undefined) changeRefreshSeconds(s.refreshSeconds);
+    if (s.deleteTorrentFileAfterAdd !== undefined)
+      changeDeleteTorrentFile(s.deleteTorrentFileAfterAdd);
+    if (s.updateCheckDays !== undefined) changeUpdateCheckDays(s.updateCheckDays);
     if (s.minimizeToTray !== undefined) changeMinimizeToTray(s.minimizeToTray);
     if (s.viewOptions !== undefined) changeViewOptions(s.viewOptions);
     if (s.clipboardAutoAdd !== undefined) changeClipboardAuto(s.clipboardAutoAdd);
@@ -1441,6 +1512,50 @@ function AppInner() {
     })();
     return () => unlisten?.();
   }, [t]);
+
+  // The Help menu's licence item, beside the update check.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        unlisten = await listen("menu://license", () => setLicenseOpen(true));
+      } catch {
+        // not running under Tauri
+      }
+    })();
+    return () => unlisten?.();
+  }, []);
+
+  // The original's "check for a new version every N days". Runs at startup and
+  // then on a slow tick; updateCheckDue decides whether anything is owed, so a
+  // machine that was asleep for a week picks the check up when it wakes rather
+  // than skipping it. A check that cannot reach GitHub says nothing - the button
+  // in the settings is where a failure belongs.
+  useEffect(() => {
+    if (updateCheckDays <= 0) return;
+    let cancelled = false;
+    const run = async () => {
+      if (cancelled) return;
+      if (!updateCheckDue(updateCheckLast.current, updateCheckDays, new Date())) return;
+      try {
+        const info = await rpc.checkForUpdates();
+        if (cancelled) return;
+        updateCheckLast.current = new Date().toISOString();
+        void saveUpdateCheck(updateCheckDays, updateCheckLast.current);
+        if (info.newer) {
+          setNotice(t("A newer version is available: {version}", { version: info.latest }));
+        }
+      } catch {
+        /* offline, or GitHub is unreachable: the button reports that */
+      }
+    };
+    void run();
+    const id = window.setInterval(() => void run(), 30 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [updateCheckDays, t]);
 
   // The tray offers what the original's does: start and stop everything, pick a
   // speed limit per direction, flip the alternative speeds. All of it acts on
@@ -1580,6 +1695,29 @@ function AppInner() {
     [servers, form, persistServers],
   );
 
+  /**
+   * Give a saved connection another name.
+   *
+   * The name is the key the list is matched on, so this is a rename and not a
+   * save: a name another entry already has is refused rather than silently
+   * swallowing it, which would leave two entries claiming one name.
+   */
+  const renameServer = useCallback(
+    (id: string, name: string) => {
+      if (!id) return;
+      const wanted = name.trim();
+      if (!wanted) return;
+      const entry = servers.find((s) => s.id === id);
+      if (!entry || entry.name === wanted) return;
+      if (servers.some((s) => s.id !== id && s.name === wanted)) {
+        setError(t("A connection with that name already exists"));
+        return;
+      }
+      void persistServers(servers.map((s) => (s.id === id ? { ...s, name: wanted } : s)));
+    },
+    [servers, persistServers, t],
+  );
+
   const deleteServer = useCallback(
     (id: string) => {
       if (!id) return;
@@ -1649,11 +1787,17 @@ function AppInner() {
         servers={servers}
         selectedServerId={selectedServerId}
         onChange={setField}
-        onConnect={() => connect()}
+        onConnect={() => {
+          // An explicit connect is the user changing their mind about the
+          // disconnect above, so the retry loop is theirs again.
+          userDisconnected.current = false;
+          void connect();
+        }}
         onDisconnect={disconnect}
         onSelectServer={selectServer}
         onSaveServer={saveServer}
         onDeleteServer={deleteServer}
+        onRenameServer={renameServer}
       />
 
       {error && <div className="error">{error}</div>}
@@ -1676,7 +1820,7 @@ function AppInner() {
           connected={connected}
           selectedCount={selection.size}
           autoRefresh={autoRefresh}
-          refreshMs={REFRESH_MS}
+          refreshMs={refreshSeconds * 1000}
           big={viewOptions.bigToolbar}
           altSpeedEnabled={!!session?.["alt-speed-enabled"]}
           speedDown={Number(session?.["speed-limit-down"] ?? 0)}
@@ -1802,6 +1946,9 @@ function AppInner() {
           onSubmit={async (password) => {
             const next = { ...form, password };
             setForm(next);
+            // Retrying by hand counts as asking to be connected, so the
+            // auto-reconnect loop may look after it again.
+            userDisconnected.current = false;
             const ok = await connect(next);
             // Stay open until the password actually works: a refusal is
             // something to correct, not to retype from a closed dialog. The
@@ -1839,6 +1986,12 @@ function AppInner() {
           onTrayAlwaysVisibleChange={changeTrayAlwaysVisible}
           autoReconnect={autoReconnect}
           onAutoReconnectChange={changeAutoReconnect}
+          refreshSeconds={refreshSeconds}
+          onRefreshSecondsChange={changeRefreshSeconds}
+          deleteTorrentFile={deleteTorrentFile}
+          onDeleteTorrentFileChange={changeDeleteTorrentFile}
+          updateCheckDays={updateCheckDays}
+          onUpdateCheckDaysChange={changeUpdateCheckDays}
         />
       )}
 
@@ -1889,6 +2042,8 @@ function AppInner() {
           }}
         />
       )}
+
+      {licenseOpen && <LicenseDialog onClose={() => setLicenseOpen(false)} />}
 
       {showProps && selection.size === 1 && (
         <TorrentPropsDialog

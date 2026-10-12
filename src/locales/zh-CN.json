@@ -643,5 +643,13 @@
   "Connect to {host}": "连接到 {host}",
   "Please enter a password to connect to {host}:": "请输入连接到 {host} 的密码：",
   "Still not authorised - check the password": "仍未通过验证，请检查密码",
-  "New location for torrent data:": "数据的新位置："
+  "New location for torrent data:": "数据的新位置：",
+  "Delete the .torrent file after a successful addition": "添加成功后删除 .torrent 文件",
+  "The file on this machine, not the daemon's own copy — the daemon is sent the metainfo and never sees it.": "指本机的文件，不是 daemon 自己的副本——发给 daemon 的是元数据，它看不到这个文件。",
+  "Check for a new version every": "每隔多久检查新版本",
+  "days (0 = never)": "天（0 = 从不）",
+  "Order in the list": "列表中的顺序",
+  "Rename the selected server": "重命名选中的服务器",
+  "A connection with that name already exists": "已存在同名连接",
+  "Could not delete the .torrent file: {error}": "无法删除 .torrent 文件：{error}"
 }

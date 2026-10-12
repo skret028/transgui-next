@@ -183,6 +183,16 @@ fn take_pending_opens(state: tauri::State<'_, PendingOpens>) -> Vec<String> {
     }
 }
 
+/// Delete a local file.
+///
+/// Only ever called with a path the file picker handed the app - the `.torrent`
+/// the user just added, when they have asked for it to go. The webview is this
+/// app's own UI, so this is no wider than the open/reveal commands beside it.
+#[tauri::command]
+fn rpc_remove_file(path: String) -> Result<(), String> {
+    std::fs::remove_file(&path).map_err(|e| format!("{path}: {e}"))
+}
+
 /// Reveal a path in the OS file manager.
 ///
 /// Done here rather than through the JS opener API on purpose: the JS side
@@ -421,6 +431,7 @@ fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             .name(Some("transgui-next"))
             .version(Some(env!("CARGO_PKG_VERSION")))
             .comments(Some("Remote control for the Transmission BitTorrent daemon"))
+            .license(Some("GNU General Public License v2.0"))
             .website(Some("https://github.com/skret028/transgui-next"))
             .build()
     };
@@ -465,6 +476,7 @@ fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .item(&MenuItemBuilder::with_id("help_home", "访问主页").build(app)?)
         .item(&MenuItemBuilder::with_id("help_dev", "开发网站").build(app)?)
         .separator()
+        .item(&MenuItemBuilder::with_id("help_license", "许可证").build(app)?)
         .item(&PredefinedMenuItem::about(
             app,
             Some("关于 transgui-next"),
@@ -539,6 +551,7 @@ pub fn run() {
             set_tray_state,
             rpc_reveal_path,
             rpc_open_path,
+            rpc_remove_file,
             write_text_file,
             read_text_file,
             geoip::geoip_status,
@@ -567,6 +580,11 @@ pub fn run() {
                     let _ = app
                         .opener()
                         .open_url("https://github.com/skret028/transgui-next", None::<&str>);
+                }
+                "help_license" => {
+                    // The original has this as a tab of its About dialog; a
+                    // window of its own is where the webview can show it.
+                    let _ = app.emit("menu://license", ());
                 }
                 _ => {}
             }
