@@ -11,6 +11,8 @@ import { MoveLocationDialog } from "./MoveLocationDialog";
 interface Props {
   detail: TorrentDetail | null;
   loading: boolean;
+  /** The height the divider has been dragged to; the default comes from the CSS. */
+  height?: number;
   /**
    * Local path to hand the OS for `detail.downloadDir` — the daemon path when
    * it shares this filesystem, else translated through the path mapping.
@@ -80,6 +82,8 @@ export function DetailsPanel({
   onMoved,
   onClose,
   onRefresh,
+  /** The height the divider has been dragged to; the default comes from the CSS. */
+  height,
 }: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("info");
@@ -201,7 +205,7 @@ export function DetailsPanel({
   };
 
   return (
-    <section className="details">
+    <section className="details" style={height && detail ? { height } : undefined}>
       <header className="details-head">
         <div className="details-tabs">
           {TABS.map((item) => (

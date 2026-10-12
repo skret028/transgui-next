@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import {
+  clampPane,
+  detailsCeiling,
+  DEFAULT_DETAILS_HEIGHT,
+  DEFAULT_FILTER_WIDTH,
+  DETAILS_PANE,
+  FILTER_PANE,
+} from "./splitSizes";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask, message, open, save } from "@tauri-apps/plugin-dialog";
@@ -52,6 +60,12 @@ import {
   type StatusBarFields,
   type UiFontSize,
   type ViewOptions,
+  loadWatchSettings,
+  saveWatchSettings,
+  loadPaneSizes,
+  savePaneSizes,
+  DEFAULT_WATCH,
+  type WatchSettings,
 } from "./settings";
 import { revealPathFor, type PathMapping } from "./paths";
 import { buildSettingsFile, parseSettingsFile } from "./settingsFile";
@@ -111,6 +125,7 @@ import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { DEFAULT_COLUMNS, normalizeColumns, type ColumnId } from "./columns";
 import { notify } from "./notify";
 import { listen } from "@tauri-apps/api/event";
+import { enqueue, take } from "./watchQueue";
 import { invoke } from "@tauri-apps/api/core";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { extractTorrentLink, magnetLink, trackersFromMagnet } from "./torrentLink";
@@ -188,6 +203,29 @@ function AppInner() {
   /** A magnet link or .torrent path the Add dialog should open with filled in.
    *  The clipboard watcher sets it, and so does the OS handing us a link. */
   const [prefillSource, setPrefillSource] = useState("");
+
+  /**
+   * The watched folder, the file from it currently on offer, and the ones still
+   * waiting their turn. What the folder holds is what gets offered; see
+   * watchQueue.ts.
+   */
+  const [watch, setWatch] = useState<WatchSettings>(DEFAULT_WATCH);
+  const [watchOffer, setWatchOffer] = useState<string | null>(null);
+  const watchWaiting = useRef<string[]>([]);
+
+  /**
+   * The two pane sizes. The original remembers both splitter positions; the way
+   * a size is held inside its bounds is in splitSizes.ts.
+   */
+  const [filterWidth, setFilterWidth] = useState(DEFAULT_FILTER_WIDTH);
+  const [detailsHeight, setDetailsHeight] = useState(DEFAULT_DETAILS_HEIGHT);
+  /** Read when a drag ends, without making the drag callbacks depend on them. */
+  const panesRef = useRef({ filterWidth, detailsHeight });
+  useEffect(() => {
+    panesRef.current = { filterWidth, detailsHeight };
+  }, [filterWidth, detailsHeight]);
+  /** Read by the timer without making it depend on the dialog's state. */
+  const showAddRef = useRef(false);
   /** Opt-in: show a moving average of the list's transfer speeds. */
   const [smoothSpeeds, setSmoothSpeeds] = useState(false);
   /** Rolling per-torrent rate samples, folded in on every refresh. */
@@ -207,6 +245,11 @@ function AppInner() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [showAdd, setShowAdd] = useState(false);
+  // Mirrored into a ref: the watch timer asks whether a dialog is up without
+  // being rebuilt every time one opens.
+  useEffect(() => {
+    showAddRef.current = showAdd;
+  }, [showAdd]);
   const [showSettings, setShowSettings] = useState(false);
   const [showLabels, setShowLabels] = useState(false);
   const [showProps, setShowProps] = useState(false);
@@ -401,6 +444,10 @@ function AppInner() {
       setServers(savedServers);
       setColumns(normalizeColumns(savedColumns));
       setNotifyOnComplete(notifyPref);
+      setWatch(await loadWatchSettings());
+      const panes = await loadPaneSizes();
+      setFilterWidth(panes.filterWidth);
+      setDetailsHeight(panes.detailsHeight);
       setPathMap(savedPathMap);
       setUiFontSize(savedFont);
       setStatusFields(savedStatusFields);
@@ -1135,6 +1182,115 @@ function AppInner() {
       live = false;
     };
   }, [showSettings]);
+
+  /**
+   * Drag a pane divider.
+   *
+   * The pointer is followed on the window rather than on the 5px strip, because
+   * a drag leaves the strip straight away and the pane has to keep moving.
+   */
+  const dragPane = useCallback(
+    (
+      e: ReactPointerEvent,
+      axis: "x" | "y",
+      from: number,
+      apply: (value: number) => void,
+      done: () => void,
+    ) => {
+      e.preventDefault();
+      const start = axis === "x" ? e.clientX : e.clientY;
+      const move = (ev: PointerEvent) =>
+        apply(from + (axis === "x" ? ev.clientX : ev.clientY) - start);
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        done();
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    },
+    [],
+  );
+
+  /** Where the dividers were left is saved when a drag ends, not on every pixel. */
+  const savePanes = useCallback(() => void savePaneSizes(panesRef.current), []);
+
+  const beginFilterDrag = (e: ReactPointerEvent) =>
+    dragPane(e, "x", filterWidth, (v) => setFilterWidth(clampPane(v, FILTER_PANE)), savePanes);
+
+  const beginDetailsDrag = (e: ReactPointerEvent) =>
+    dragPane(
+      e,
+      "y",
+      detailsHeight,
+      // Stopped short of the window's own height so the list keeps room.
+      (v) => setDetailsHeight(clampPane(Math.min(v, detailsCeiling(window.innerHeight, 200)), DETAILS_PANE)),
+      savePanes,
+    );
+
+  /** Offer the next watched file, if there is one and the dialog is free. */
+  const offerNextWatch = useCallback(() => {
+    if (showAddRef.current) return;
+    const step = take(watchWaiting.current);
+    watchWaiting.current = step.waiting;
+    if (!step.path) return;
+    setWatchOffer(step.path);
+    setPrefillSource(step.path);
+    setShowAdd(true);
+  }, []);
+
+  /**
+   * Look in the watched folder and queue what is there.
+   *
+   * Same rules as the original's timer: it only looks while nothing else is
+   * pending, and a file that is still in the folder gets offered again on the
+   * next scan - which is what makes "delete the .torrent after a successful
+   * addition" the thing that settles a watch folder down.
+   */
+  const watchTick = useCallback(async () => {
+    if (!watch.folder || showAddRef.current) return;
+    try {
+      const scan = await rpc.watchScan(watch.folder);
+      if (!scan.exists || !scan.writable) return;
+      watchWaiting.current = enqueue(watchWaiting.current, scan.files);
+    } catch {
+      /* a folder that cannot be read is not worth a banner every interval */
+    }
+    offerNextWatch();
+  }, [watch.folder, offerNextWatch]);
+
+  useEffect(() => {
+    if (!watch.folder) return;
+    const ms = Math.max(1, watch.intervalMinutes) * 60_000;
+    const id = window.setInterval(() => void watchTick(), ms);
+    return () => window.clearInterval(id);
+  }, [watch.folder, watch.intervalMinutes, watchTick]);
+
+  // A dialog closing lets the next watched file take its turn.
+  useEffect(() => {
+    if (!showAdd) offerNextWatch();
+  }, [showAdd, offerNextWatch]);
+
+  const changeWatch = useCallback(
+    (next: WatchSettings) => {
+      setWatch(next);
+      void saveWatchSettings(next);
+      if (!next.folder) return;
+      // Said once, when it is set, rather than on every look: a folder that is
+      // not there or cannot be written to would otherwise fail silently for as
+      // long as the setting is wrong.
+      void rpc
+        .watchScan(next.folder)
+        .then((scan) => {
+          if (!scan.exists) setNotice(t("That folder is not there."));
+          else if (!scan.writable) setNotice(t("That folder cannot be written to."));
+        })
+        .catch(() => {
+          /* the scan itself failed to run; the timer will try again */
+        });
+    },
+    [t],
+  );
 
   const changeMinimizeToTray = useCallback((on: boolean) => {
     setMinimizeToTray(on);
@@ -1897,7 +2053,15 @@ function AppInner() {
 
       <div className="main-area">
         {viewOptions.filterPane && (
-          <FilterPane torrents={torrents} selection={filterSel} onSelect={setFilterSel} />
+          <>
+            <FilterPane
+              torrents={torrents}
+              selection={filterSel}
+              onSelect={setFilterSel}
+              width={filterWidth}
+            />
+            <div className="splitter splitter-v" onPointerDown={beginFilterDrag} />
+          </>
         )}
 
         <div className="list-area">
@@ -1918,11 +2082,14 @@ function AppInner() {
           />
 
           {viewOptions.details && (
-            <DetailsPanel
+            <>
+              <div className="splitter splitter-h" onPointerDown={beginDetailsDrag} />
+              <DetailsPanel
               detail={detail}
               loading={detailLoading}
               revealTarget={revealTarget}
               mapPath={mapLocalPath}
+              height={detailsHeight}
               dirHistory={dirHistory}
               onMoved={rememberDir}
               onClose={() => {
@@ -1931,6 +2098,7 @@ function AppInner() {
               }}
               onRefresh={refreshDetail}
             />
+            </>
           )}
         </div>
       </div>
@@ -1968,9 +2136,11 @@ function AppInner() {
       {showAdd && (
         <AddTorrentDialog
           initialSource={prefillSource}
+          initialDownloadDir={watchOffer ? watch.destination : ""}
           onClose={() => {
             setShowAdd(false);
             setPrefillSource("");
+            setWatchOffer(null);
           }}
           onPrepare={prepareAdd}
           onApply={applyPreparedAdd}
@@ -2028,6 +2198,8 @@ function AppInner() {
           onSmoothSpeedsChange={changeSmoothSpeeds}
           trayAlwaysVisible={trayAlwaysVisible}
           onTrayAlwaysVisibleChange={changeTrayAlwaysVisible}
+          watch={watch}
+          onWatchChange={changeWatch}
           autoReconnect={autoReconnect}
           onAutoReconnectChange={changeAutoReconnect}
           refreshSeconds={refreshSeconds}

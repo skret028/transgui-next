@@ -195,6 +195,58 @@ fn rpc_remove_file(path: String) -> Result<(), String> {
     std::fs::remove_file(&path).map_err(|e| format!("{path}: {e}"))
 }
 
+/// What a scan of the watched folder found.
+#[derive(serde::Serialize)]
+pub struct WatchScan {
+    /// The folder is set, and it is there.
+    exists: bool,
+    /// It can be written to. The original insists on this, and for a reason:
+    /// with "delete the .torrent after a successful addition" on, a file that
+    /// cannot be removed would be offered again on every scan forever.
+    writable: bool,
+    /// The `.torrent` files directly in it, name-sorted so the order is the
+    /// same on every scan rather than whatever the filesystem feels like.
+    files: Vec<String>,
+}
+
+/// List the `.torrent` files in the watched folder.
+///
+/// Read-only, and only what is directly in the folder - the original scans the
+/// one folder with a `*.torrent` pattern and nothing deeper. The files come back
+/// as paths; what happens to them is the frontend's ordinary Add dialog, the
+/// same as a file the user opened themselves.
+#[tauri::command]
+fn watch_scan(folder: String) -> WatchScan {
+    let trimmed = folder.trim();
+    let path = std::path::Path::new(trimmed);
+    if trimmed.is_empty() || !path.is_dir() {
+        return WatchScan { exists: false, writable: false, files: Vec::new() };
+    }
+    // `readonly` is the owner's write bit, which is the check that matters for a
+    // folder this app is meant to be able to empty.
+    let writable = std::fs::metadata(path).map(|m| !m.permissions().readonly()).unwrap_or(false);
+    if !writable {
+        return WatchScan { exists: true, writable: false, files: Vec::new() };
+    }
+    let mut files: Vec<String> = std::fs::read_dir(path)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.is_file()
+                        && p.file_name()
+                            .map(|n| n.to_string_lossy().to_lowercase().ends_with(".torrent"))
+                            .unwrap_or(false)
+                })
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    WatchScan { exists: true, writable: true, files }
+}
+
 /// Reveal a path in the OS file manager.
 ///
 /// Done here rather than through the JS opener API on purpose: the JS side
@@ -514,6 +566,9 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_deep_link::init())
+        // Where the window was and how big it was. The two pane sizes are the
+        // app's own settings, not this plugin's business.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -555,6 +610,7 @@ pub fn run() {
             rpc_reveal_path,
             rpc_open_path,
             rpc_remove_file,
+            watch_scan,
             write_text_file,
             read_text_file,
             geoip::geoip_status,

@@ -8,6 +8,8 @@ interface Props {
   torrents: Torrent[];
   selection: FilterSelection;
   onSelect: (selection: FilterSelection) => void;
+  /** The width the divider has been dragged to; the default comes from the CSS. */
+  width?: number;
 }
 
 /**
@@ -15,12 +17,12 @@ interface Props {
  * count. Counts are over the whole list, so the pane still shows where things
  * are while one of its rows is the active filter.
  */
-export function FilterPane({ torrents, selection, onSelect }: Props) {
+export function FilterPane({ torrents, selection, onSelect, width }: Props) {
   const t = useT();
   const groups = useMemo(() => buildGroups(torrents), [torrents]);
 
   return (
-    <aside className="filter-pane">
+    <aside className="filter-pane" style={width ? { width } : undefined}>
       <button
         className={`pane-item ${selection.kind === "all" ? "active" : ""}`}
         onClick={() => onSelect(ALL_SELECTION)}

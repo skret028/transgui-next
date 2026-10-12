@@ -32,6 +32,11 @@ interface Props {
   defaultPaused?: boolean;
   /** Pre-fill the magnet/URL field (e.g. a link found on the clipboard). */
   initialSource?: string;
+  /**
+   * Pre-fill the download directory. The original does this for a torrent found
+   * in the watched folder, when a watch destination folder is configured.
+   */
+  initialDownloadDir?: string;
   /** Recently used download directories, newest first. */
   dirHistory?: string[];
 }
@@ -43,12 +48,13 @@ export function AddTorrentDialog({
   onDiscard,
   defaultPaused = false,
   initialSource = "",
+  initialDownloadDir = "",
   dirHistory = [],
 }: Props) {
   const t = useT();
   const [source, setSource] = useState(initialSource);
   const [file, setFile] = useState("");
-  const [dir, setDir] = useState("");
+  const [dir, setDir] = useState(initialDownloadDir);
   const [labels, setLabels] = useState("");
   const [paused, setPaused] = useState(defaultPaused);
   const [busy, setBusy] = useState(false);

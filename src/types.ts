@@ -270,3 +270,10 @@ export interface FreeSpace {
 export interface PortTest {
   "port-is-open": boolean;
 }
+
+/** What a scan of the watched folder found; the fields match the Rust struct. */
+export interface WatchScan {
+  exists: boolean;
+  writable: boolean;
+  files: string[];
+}

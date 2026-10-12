@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "node --experimental-strip-types scripts/paths.test.ts && node --experimental-strip-types scripts/speedAverage.test.ts && node --experimental-strip-types scripts/torrentLink.test.ts && node --experimental-strip-types scripts/filePriority.test.ts && node --experimental-strip-types scripts/trackerInfo.test.ts && node --experimental-strip-types scripts/dirHistory.test.ts && node --experimental-strip-types scripts/shortcuts.test.ts && node --experimental-strip-types scripts/trackers.test.ts && node --experimental-strip-types scripts/updateCheck.test.ts && node --experimental-strip-types scripts/columns.test.ts",
+    "test": "node --experimental-strip-types scripts/paths.test.ts && node --experimental-strip-types scripts/speedAverage.test.ts && node --experimental-strip-types scripts/torrentLink.test.ts && node --experimental-strip-types scripts/filePriority.test.ts && node --experimental-strip-types scripts/trackerInfo.test.ts && node --experimental-strip-types scripts/dirHistory.test.ts && node --experimental-strip-types scripts/shortcuts.test.ts && node --experimental-strip-types scripts/trackers.test.ts && node --experimental-strip-types scripts/updateCheck.test.ts && node --experimental-strip-types scripts/columns.test.ts && node --experimental-strip-types scripts/watchQueue.test.ts && node --experimental-strip-types scripts/splitSizes.test.ts",
     "i18n:import": "node scripts/import-transgui-lang.mjs"
   },
   "dependencies": {

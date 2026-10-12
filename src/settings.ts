@@ -2,6 +2,13 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
 import type { ConnForm, ServerBookmark } from "./types";
 import { normalizePathMap, type PathMapping } from "./paths";
+import {
+  clampPane,
+  DEFAULT_DETAILS_HEIGHT,
+  DEFAULT_FILTER_WIDTH,
+  DETAILS_PANE,
+  FILTER_PANE,
+} from "./splitSizes";
 
 const FILE = "settings.json";
 const KEY = "connection";
@@ -451,5 +458,83 @@ export async function saveUpdateCheck(days: number, last: string): Promise<void>
   const store = await getStore();
   await store.set(UPDATE_CHECK_DAYS_KEY, days);
   await store.set(UPDATE_CHECK_LAST_KEY, last);
+  await store.save();
+}
+
+/**
+ * The watched folder: a place to drop `.torrent` files that get added for you.
+ *
+ * The original keeps this in its INI alone, so it is only reachable by editing a
+ * file by hand; the meaning is kept and the way in is not.
+ */
+export interface WatchSettings {
+  /** Empty turns the watch off, which is the original's default too. */
+  folder: string;
+  /** Minutes between scans. The original defaults to one. */
+  intervalMinutes: number;
+  /** Download directory for what is found; empty keeps the dialog's own default. */
+  destination: string;
+}
+
+const WATCH_FOLDER_KEY = "watchFolder";
+const WATCH_INTERVAL_KEY = "watchIntervalMinutes";
+const WATCH_DESTINATION_KEY = "watchDestination";
+
+export const DEFAULT_WATCH: WatchSettings = { folder: "", intervalMinutes: 1, destination: "" };
+
+export async function loadWatchSettings(): Promise<WatchSettings> {
+  try {
+    const store = await getStore();
+    return {
+      folder: (await store.get<string>(WATCH_FOLDER_KEY)) ?? "",
+      intervalMinutes: (await store.get<number>(WATCH_INTERVAL_KEY)) ?? 1,
+      destination: (await store.get<string>(WATCH_DESTINATION_KEY)) ?? "",
+    };
+  } catch {
+    return { ...DEFAULT_WATCH };
+  }
+}
+
+/**
+ * Where the two pane dividers were left.
+ *
+ * Clamped on the way in and on the way out: a size saved on a large screen must
+ * not come back on a small one as a pane that has swallowed the window.
+ */
+export interface PaneSizes {
+  filterWidth: number;
+  detailsHeight: number;
+}
+
+const FILTER_WIDTH_KEY = "filterWidth";
+const DETAILS_HEIGHT_KEY = "detailsHeight";
+
+export async function loadPaneSizes(): Promise<PaneSizes> {
+  try {
+    const store = await getStore();
+    return {
+      filterWidth: clampPane((await store.get<number>(FILTER_WIDTH_KEY)) ?? DEFAULT_FILTER_WIDTH, FILTER_PANE),
+      detailsHeight: clampPane(
+        (await store.get<number>(DETAILS_HEIGHT_KEY)) ?? DEFAULT_DETAILS_HEIGHT,
+        DETAILS_PANE,
+      ),
+    };
+  } catch {
+    return { filterWidth: DEFAULT_FILTER_WIDTH, detailsHeight: DEFAULT_DETAILS_HEIGHT };
+  }
+}
+
+export async function savePaneSizes(sizes: PaneSizes): Promise<void> {
+  const store = await getStore();
+  await store.set(FILTER_WIDTH_KEY, clampPane(sizes.filterWidth, FILTER_PANE));
+  await store.set(DETAILS_HEIGHT_KEY, clampPane(sizes.detailsHeight, DETAILS_PANE));
+  await store.save();
+}
+
+export async function saveWatchSettings(watch: WatchSettings): Promise<void> {
+  const store = await getStore();
+  await store.set(WATCH_FOLDER_KEY, watch.folder);
+  await store.set(WATCH_INTERVAL_KEY, watch.intervalMinutes);
+  await store.set(WATCH_DESTINATION_KEY, watch.destination);
   await store.save();
 }

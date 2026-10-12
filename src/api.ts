@@ -12,6 +12,7 @@ import type {
   SessionStats,
   Torrent,
   TorrentDetail,
+  WatchScan,
 } from "./types";
 
 /** What the tray's menu is built from; the field names match the Rust struct. */
@@ -105,6 +106,8 @@ export const rpc = {
   revealPath: (path: string) => invoke<unknown>("rpc_reveal_path", { path }),
   openPath: (path: string) => invoke<unknown>("rpc_open_path", { path }),
   removeFile: (path: string) => invoke<unknown>("rpc_remove_file", { path }),
+  /** What the watched folder holds right now; see the command for the rules. */
+  watchScan: (folder: string) => invoke<WatchScan>("watch_scan", { folder }),
 
   /** Who the system opens magnet links and .torrent files with. */
   handlerState: () => invoke<HandlerState>("rpc_handler_state"),

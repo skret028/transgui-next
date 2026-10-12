@@ -29,6 +29,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-clipboard-manager = "2"
 # Declares the magnet: scheme in the bundle and can register the app as the
 # system's handler for it.
+tauri-plugin-window-state = "2"
 tauri-plugin-deep-link = "2"
 # getnameinfo/PTR reverse lookups for peer addresses (explicitly triggered).
 dns-lookup = "4"

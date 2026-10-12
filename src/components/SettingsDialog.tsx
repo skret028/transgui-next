@@ -1,3 +1,5 @@
+import { open } from "@tauri-apps/plugin-dialog";
+import type { WatchSettings } from "../settings";
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
@@ -60,6 +62,9 @@ interface Props {
    *  where the app can change that itself. */
   handler: HandlerState;
   onHandlerChange: (kind: "magnet" | "torrent", on: boolean) => void;
+  /** The watched folder: a place to drop .torrent files that get added for you. */
+  watch: WatchSettings;
+  onWatchChange: (watch: WatchSettings) => void;
 }
 
 interface Fields {
@@ -308,6 +313,8 @@ export function SettingsDialog({
   onUpdateCheckDaysChange,
   handler,
   onHandlerChange,
+  watch,
+  onWatchChange,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -430,6 +437,26 @@ export function SettingsDialog({
     } finally {
       setUpdateBusy(false);
     }
+  };
+
+  /** Pick the watched folder on this machine. */
+  const pickWatchFolder = async () => {
+    const picked = await open({
+      directory: true,
+      multiple: false,
+      title: t("Select the folder to watch"),
+    });
+    if (typeof picked === "string") onWatchChange({ ...watch, folder: picked });
+  };
+
+  /** Pick where the watched torrents should be downloaded to. */
+  const pickWatchDestination = async () => {
+    const picked = await open({
+      directory: true,
+      multiple: false,
+      title: t("Select a download folder"),
+    });
+    if (typeof picked === "string") onWatchChange({ ...watch, destination: picked });
   };
 
   return (
@@ -1027,6 +1054,57 @@ export function SettingsDialog({
               </p>
             </>
           )}
+
+          <div className="kv-inline">
+            <label className="chk">
+              <span>{t("Watch a folder for .torrent files")}</span>
+            </label>
+            <input
+              value={watch.folder}
+              onChange={(e) => onWatchChange({ ...watch, folder: e.target.value })}
+              placeholder={t("(none)")}
+            />
+            <button className="btn" onClick={() => void pickWatchFolder()}>
+              {t("Browse…")}
+            </button>
+          </div>
+
+          <div className="kv-inline">
+            <label className="chk">
+              <span>{t("Look in it every")}</span>
+            </label>
+            <input
+              className="narrow"
+              type="number"
+              min={1}
+              value={watch.intervalMinutes}
+              onChange={(e) =>
+                onWatchChange({
+                  ...watch,
+                  intervalMinutes: Math.max(1, Math.floor(Number(e.target.value) || 1)),
+                })
+              }
+            />
+            <span className="muted">{t("minutes")}</span>
+          </div>
+
+          <div className="kv-inline">
+            <label className="chk">
+              <span>{t("Put what it finds in")}</span>
+            </label>
+            <input
+              value={watch.destination}
+              onChange={(e) => onWatchChange({ ...watch, destination: e.target.value })}
+              placeholder={t("(both blank = the server's own default)")}
+            />
+            <button className="btn" onClick={() => void pickWatchDestination()}>
+              {t("Browse…")}
+            </button>
+          </div>
+
+          <p className="muted">
+            {t("What is found opens the Add dialog like any other torrent. The folder has to exist and be writable, and a file that is still in it is offered again on the next look - which is what \"delete the .torrent after a successful addition\" settles.")}
+          </p>
 
           <label className="chk">
             <input

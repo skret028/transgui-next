@@ -206,6 +206,26 @@ uses:
   entry holds refused rather than silently swallowed.
 - **The licence notice** - as a Help-menu item next to About rather than a tab of
   it, because the About panel is the platform's own. The text is not translated.
+- **The watched folder** - the original's `Interface/WatchLocalFolder`, its
+  interval and its destination folder: every N minutes the folder is looked in
+  for `.torrent` files, and what is there opens the ordinary Add dialog, one at
+  a time, with the watch destination pre-filled as the download directory - which
+  is exactly what the original's `IsWatchTorrent` does and the only thing it
+  does. The original has no way in but its INI, since the setting never reached
+  a form; here it is three fields in the settings. Held to the same rules: the
+  folder has to exist and be writable, and a file that is still in it is offered
+  again on the next look, which is what "delete the .torrent after a successful
+  addition" settles. Files are listed name-sorted, so the order does not depend
+  on the filesystem.
+- **The window and the two pane dividers** - where the window was and how big it
+  was, and where the filter and details dividers were left. The dividers are new
+  rather than restored: the original has a `TSplitter` for each, the rewrite had
+  fixed sizes. The window frame is `tauri-plugin-window-state`'s; the pane sizes
+  are the app's own settings, clamped on both load and save so a size saved on a
+  larger screen cannot come back as a pane that has swallowed the window. Two
+  notes: the plugin writes the frame on a clean exit, so a crash or a SIGKILL
+  loses it (the pane sizes, saved as they are dragged, survive), and the pane
+  sizes go in the settings export where the frame does not.
 
 Two bugs the closed-loop checks turned up on the way, both fixed:
 

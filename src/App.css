@@ -984,3 +984,22 @@ table.sub-table td.empty {
   max-height: 50vh;
   overflow-y: auto;
 }
+
+/* The pane dividers. Invisible until the pointer is on them, so the layout
+   looks as it did; 5px of hit area, the same as the original's splitters, and
+   the line that used to be the pane's own border stays where it was. */
+.splitter {
+  flex: 0 0 auto;
+  background: transparent;
+}
+.splitter-v {
+  width: 5px;
+  cursor: col-resize;
+}
+.splitter-h {
+  height: 5px;
+  cursor: row-resize;
+}
+.splitter:hover {
+  background: #3a4048;
+}
