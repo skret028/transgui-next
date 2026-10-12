@@ -27,6 +27,9 @@ tauri-plugin-notification = "2"
 # Reads the system clipboard for the opt-in "add torrent links from the
 # clipboard" watcher (disabled by default).
 tauri-plugin-clipboard-manager = "2"
+# Declares the magnet: scheme in the bundle and can register the app as the
+# system's handler for it.
+tauri-plugin-deep-link = "2"
 # getnameinfo/PTR reverse lookups for peer addresses (explicitly triggered).
 dns-lookup = "4"
 serde = { version = "1", features = ["derive"] }
@@ -38,6 +41,11 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 tokio = { version = "1", features = ["sync"] }
 base64 = "0.22"
+
+# Asking LaunchServices to hand over magnet: / .torrent, and reading back who
+# holds them. Already in the tree via tauri, so this adds no download.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

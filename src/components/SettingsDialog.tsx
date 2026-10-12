@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
 import { rpc, type GeoIpStatus, type UpdateInfo } from "../api";
-import type { SessionInfo } from "../types";
+import type { HandlerState, SessionInfo } from "../types";
 import type { PathMapping } from "../paths";
 import type {
   HiddenRefresh,
@@ -56,6 +56,10 @@ interface Props {
   /** Client-side: how often to look for a new version. 0 turns it off. */
   updateCheckDays: number;
   onUpdateCheckDaysChange: (days: number) => void;
+  /** Who the system opens magnet links and .torrent files with. Only rendered
+   *  where the app can change that itself. */
+  handler: HandlerState;
+  onHandlerChange: (kind: "magnet" | "torrent", on: boolean) => void;
 }
 
 interface Fields {
@@ -302,6 +306,8 @@ export function SettingsDialog({
   onDeleteTorrentFileChange,
   updateCheckDays,
   onUpdateCheckDaysChange,
+  handler,
+  onHandlerChange,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -988,6 +994,31 @@ export function SettingsDialog({
           <p className="muted">
             {t("The file on this machine, not the daemon's own copy — the daemon is sent the metainfo and never sees it.")}
           </p>
+
+          {handler.supported && (
+            <>
+              <p className="muted">{t("Let the system open these with transgui-next:")}</p>
+              <label className="chk">
+                <input
+                  type="checkbox"
+                  checked={handler.torrent}
+                  onChange={(e) => onHandlerChange("torrent", e.target.checked)}
+                />
+                {t("Handle .torrent files")}
+              </label>
+              <label className="chk">
+                <input
+                  type="checkbox"
+                  checked={handler.magnet}
+                  onChange={(e) => onHandlerChange("magnet", e.target.checked)}
+                />
+                {t("Handle magnet links")}
+              </label>
+              <p className="muted">
+                {t("This changes the system's own default handler; it cannot be undone here, only handed to another app.")}
+              </p>
+            </>
+          )}
 
           <label className="chk">
             <input

@@ -147,17 +147,31 @@ implemented.
 Found by a second, mechanical pass over the original: every action, every dialog
 control and every RPC call on one side, and the equivalent on the other. The list
 above survived that pass with two corrections (the Properties and queue-move
-keys, both noted in the shortcut row). Seven of the eight gaps it turned up have
-since been closed - each was driven through the real UI and read back from the
-daemon or the settings file - leaving one:
+keys, both noted in the shortcut row). Every gap it turned up is now closed:
 
-- **Being the system's magnet / `.torrent` handler.** The original ships
-  `urllistenerosx.pas` and an option ("Handle magnet links by %s") that makes the
-  application the one a `magnet:` link opens, and forwards whatever arrives. This
-  rewrite takes a link pasted into the Add dialog and reads one off the clipboard
-  when that setting is on, but it cannot yet be the registered handler: that
-  needs a URL scheme in the bundle's `Info.plist` and the hand-off plumbed
-  through, which is a packaging job rather than a UI one.
+- **Being the system's magnet / `.torrent` handler.** The bundle declares both -
+  `CFBundleURLTypes` for `magnet` and a `CFBundleDocumentTypes` entry for
+  `.torrent` at handler rank Default, which is what the original's
+  `setup/macosx/Info.plist` declares - and the app receives them through the
+  run loop the same way `urllistenerosx.pas` does. What arrives is parked until
+  the window is listening, so a cold launch by opening a `.torrent` is not lost,
+  and it opens the Add dialog filled in rather than adding it unseen: the
+  original builds a `TAddTorrentForm` around it (`DoAddTorrent`), and until now
+  this rewrite added it straight away, which was a difference rather than a
+  shortcut.
+- Being the *default* handler is a system setting rather than the app's, but
+  the app can ask for it: the settings gain the original's two checkboxes for
+  the platforms where asking is possible. The original's pair write the Windows
+  registry under `{$ifdef mswindows}`; on macOS the same intent is a
+  LaunchServices call, and the state shown is the system's answer, not a cached
+  preference — change it in Finder and the checkbox follows.
+
+Two differences worth naming. The URL type comes out as `CFBundleTypeRole
+Editor` because that is the deep-link plugin's default, where the original
+declares `Viewer`; nothing reads the role, and it is not worth patching the
+built plist for. And the original's Windows checkboxes register the app by
+writing registry keys itself, whereas here the association comes from the bundle
+declaration and the checkbox only claims the default.
 
 ## Closed since the audit
 

@@ -1,6 +1,7 @@
 //! Application wiring: plugins, RPC state, system tray, and the global hotkey.
 
 mod geoip;
+mod default_handler;
 mod resolve;
 mod rpc;
 mod update;
@@ -511,6 +512,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -558,6 +560,8 @@ pub fn run() {
             geoip::geoip_download,
             geoip::geoip_clear,
             geoip::geoip_lookup,
+            default_handler::rpc_handler_state,
+            default_handler::rpc_set_handler,
             resolve::resolve_host_names,
             update::check_for_updates,
         ])

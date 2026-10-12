@@ -73,6 +73,7 @@ import {
 import type {
   AddTorrentOptions,
   ConnForm,
+  HandlerState,
   ServerBookmark,
   SessionInfo,
   Torrent,
@@ -171,6 +172,12 @@ function AppInner() {
   const [deleteTorrentFile, setDeleteTorrentFile] = useState(false);
   /** Days between version checks; 0 leaves the check to the button. */
   const [updateCheckDays, setUpdateCheckDays] = useState(0);
+  /** Who the system opens magnet links and .torrent files with. */
+  const [handler, setHandler] = useState<HandlerState>({
+    supported: false,
+    torrent: false,
+    magnet: false,
+  });
   /** When the last version check ran, as it was read at startup. */
   const updateCheckLast = useRef("");
   const [minimizeToTray, setMinimizeToTray] = useState(true);
@@ -178,7 +185,9 @@ function AppInner() {
   /** Opt-in: pre-fill the Add dialog when a torrent link is copied. */
   const [clipboardAuto, setClipboardAuto] = useState(false);
   /** Link found on the clipboard, handed to the Add dialog for confirmation. */
-  const [clipboardLink, setClipboardLink] = useState("");
+  /** A magnet link or .torrent path the Add dialog should open with filled in.
+   *  The clipboard watcher sets it, and so does the OS handing us a link. */
+  const [prefillSource, setPrefillSource] = useState("");
   /** Opt-in: show a moving average of the list's transfer speeds. */
   const [smoothSpeeds, setSmoothSpeeds] = useState(false);
   /** Rolling per-torrent rate samples, folded in on every refresh. */
@@ -399,6 +408,13 @@ function AppInner() {
       setRefreshSeconds(savedRefreshSeconds);
       setDeleteTorrentFile(savedDeleteTorrentFile);
       setUpdateCheckDays(savedUpdateCheck.days);
+      // Not a stored preference: the system's own answer, read at startup so a
+      // change made in Finder is shown as it is.
+      try {
+        setHandler(await rpc.handlerState());
+      } catch {
+        /* not available on this platform */
+      }
       updateCheckLast.current = savedUpdateCheck.last;
       setMinimizeToTray(savedMinimizeToTray);
       minimizeToTrayRef.current = savedMinimizeToTray;
@@ -826,7 +842,7 @@ function AppInner() {
         const duplicate = duplicateIdOf(res);
         if (duplicate != null) {
           setShowAdd(false);
-          setClipboardLink("");
+          setPrefillSource("");
           await refresh();
           await announceDuplicate(
             duplicate,
@@ -877,7 +893,7 @@ function AppInner() {
         if (choices.start) await rpc.action("start", [prepared.id]);
         setSelection(new Set([prepared.id]));
         setShowAdd(false);
-        setClipboardLink("");
+        setPrefillSource("");
         // The original's client-side option, for adds that came from a file.
         // The daemon never sees that file, so its own trash-original setting
         // cannot do this. A failure here is not worth an error: the torrent is
@@ -1086,6 +1102,15 @@ function AppInner() {
     void saveUpdateCheck(days, updateCheckLast.current);
   }, []);
 
+  /** Hand a scheme or file type to this app, or say why that cannot be done. */
+  const changeHandler = useCallback(async (kind: "magnet" | "torrent", on: boolean) => {
+    try {
+      setHandler(await rpc.setHandler(kind, on));
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
   const changeMinimizeToTray = useCallback((on: boolean) => {
     setMinimizeToTray(on);
     minimizeToTrayRef.current = on;
@@ -1264,7 +1289,7 @@ function AppInner() {
         const link = extractTorrentLink(text);
         if (!link || clipboardSeenRef.current.has(link)) return;
         clipboardSeenRef.current.add(link);
-        setClipboardLink(link);
+        setPrefillSource(link);
         setShowAdd(true);
       })();
     }, CLIPBOARD_MS);
@@ -1442,22 +1467,16 @@ function AppInner() {
     t,
   ]);
 
-  // Add a .torrent (or magnet) the OS asked us to open.
-  const addFromOs = useCallback(
-    async (target: string) => {
-      try {
-        await rpc.add(
-          target.toLowerCase().startsWith("magnet:")
-            ? { filename: target }
-            : { local_torrent_path: target },
-        );
-        await refresh();
-      } catch (e) {
-        setError(String(e));
-      }
-    },
-    [refresh],
-  );
+  // A .torrent or magnet the OS asked us to open.
+  //
+  // The original builds its Add dialog around it rather than adding it unseen
+  // (TAddTorrentForm, from DoAddTorrent), and that is what happens here: the
+  // dialog comes up with the link or the path filled in, and nothing is added
+  // until it is confirmed.
+  const openFromOs = useCallback((target: string) => {
+    setPrefillSource(target);
+    setShowAdd(true);
+  }, []);
 
   // File associations: register the listener first, then drain whatever the OS
   // queued before the webview was up - that is the normal case when the app is
@@ -1473,17 +1492,17 @@ function AppInner() {
     void (async () => {
       try {
         unlisten = await listen<string>("open-torrent", (e) => {
-          void addFromOs(e.payload);
+          openFromOs(e.payload);
         });
         for (const target of await invoke<string[]>("take_pending_opens")) {
-          void addFromOs(target);
+          openFromOs(target);
         }
       } catch {
         // not running under Tauri
       }
     })();
     return () => unlisten?.();
-  }, [connected, addFromOs]);
+  }, [connected, openFromOs]);
 
   // Help -> Check for new version. The settings dialog runs its own check and
   // shows the result inline; from the menu the result has to land somewhere
@@ -1833,7 +1852,7 @@ function AppInner() {
           onCopyMagnet={() => void copyMagnet()}
           onGlobalAction={globalAction}
           onOpenAdd={() => {
-            setClipboardLink("");
+            setPrefillSource("");
             setShowAdd(true);
           }}
           onOpenSettings={() => setShowSettings(true)}
@@ -1923,10 +1942,10 @@ function AppInner() {
 
       {showAdd && (
         <AddTorrentDialog
-          initialSource={clipboardLink}
+          initialSource={prefillSource}
           onClose={() => {
             setShowAdd(false);
-            setClipboardLink("");
+            setPrefillSource("");
           }}
           onPrepare={prepareAdd}
           onApply={applyPreparedAdd}
@@ -1992,6 +2011,8 @@ function AppInner() {
           onDeleteTorrentFileChange={changeDeleteTorrentFile}
           updateCheckDays={updateCheckDays}
           onUpdateCheckDaysChange={changeUpdateCheckDays}
+          handler={handler}
+          onHandlerChange={changeHandler}
         />
       )}
 

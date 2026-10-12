@@ -6,6 +6,7 @@ import type {
   ConnectResult,
   ConnForm,
   FreeSpace,
+  HandlerState,
   PortTest,
   SessionInfo,
   SessionStats,
@@ -104,6 +105,11 @@ export const rpc = {
   revealPath: (path: string) => invoke<unknown>("rpc_reveal_path", { path }),
   openPath: (path: string) => invoke<unknown>("rpc_open_path", { path }),
   removeFile: (path: string) => invoke<unknown>("rpc_remove_file", { path }),
+
+  /** Who the system opens magnet links and .torrent files with. */
+  handlerState: () => invoke<HandlerState>("rpc_handler_state"),
+  setHandler: (kind: "magnet" | "torrent", on: boolean) =>
+    invoke<HandlerState>("rpc_set_handler", { kind, on }),
 
   /** Settings export/import: plain text files at paths the user picked. */
   writeTextFile: (path: string, contents: string) =>

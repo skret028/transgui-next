@@ -141,6 +141,15 @@ export interface ConnectResult {
 
 /** What the daemon reports back about a torrent the Add dialog has just handed
  *  to it, while the user is still choosing which of its files to take. */
+/** Whether this app is the system's handler for magnet links / .torrent files.
+
+ *  `supported` is false on platforms where the app leaves that to the installer. */
+export interface HandlerState {
+  supported: boolean;
+  torrent: boolean;
+  magnet: boolean;
+}
+
 export interface PreparedAdd {
   id: number;
   /** The daemon's own name for it; "Save as" starts from this. */
