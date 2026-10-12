@@ -39,6 +39,9 @@ interface Props {
   initialDownloadDir?: string;
   /** Recently used download directories, newest first. */
   dirHistory?: string[];
+  /** The size the dialog was last left at; it can be dragged to a new one. */
+  size?: { width: number; height: number };
+  onSizeChange?: (size: { width: number; height: number }) => void;
 }
 
 export function AddTorrentDialog({
@@ -50,6 +53,8 @@ export function AddTorrentDialog({
   initialSource = "",
   initialDownloadDir = "",
   dirHistory = [],
+  size,
+  onSizeChange,
 }: Props) {
   const t = useT();
   const [source, setSource] = useState(initialSource);
@@ -255,6 +260,10 @@ export function AddTorrentDialog({
     <Modal
       title={t("Add torrent")}
       onClose={onClose}
+      resizable
+      width={size?.width}
+      height={size?.height}
+      onResizeEnd={onSizeChange}
       footer={
         <>
           <button className="btn" onClick={onClose}>

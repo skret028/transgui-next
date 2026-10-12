@@ -4,7 +4,15 @@ import { useT } from "../i18n";
 import { rpc } from "../api";
 import { copyText } from "../clipboard";
 import { fileMode, filePatch, filePatchAll, type FileMode } from "../filePriority";
-import { formatBytes, formatDate, formatDuration, formatPercent, formatRatio, formatSpeed } from "../format";
+import {
+  dateHint,
+  dateText,
+  formatBytes,
+  formatDuration,
+  formatPercent,
+  formatRatio,
+  formatSpeed,
+} from "../format";
 import { PromptDialog } from "./PromptDialog";
 import { MoveLocationDialog } from "./MoveLocationDialog";
 
@@ -13,6 +21,8 @@ interface Props {
   loading: boolean;
   /** The height the divider has been dragged to; the default comes from the CSS. */
   height?: number;
+  /** Show dates as how long ago they were, the original's FromNow. */
+  fromNow: boolean;
   /**
    * Local path to hand the OS for `detail.downloadDir` — the daemon path when
    * it shares this filesystem, else translated through the path mapping.
@@ -64,11 +74,13 @@ const ANNOUNCE_KEY = [
 /** The trailing component of a torrent-relative path; that is what gets renamed. */
 const basename = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
-function Row({ label, value }: { label: string; value: ReactNode }) {
+function Row({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
     <>
       <div className="kv-key">{label}</div>
-      <div className="kv-val">{value}</div>
+      <div className="kv-val" title={hint}>
+        {value}
+      </div>
     </>
   );
 }
@@ -84,6 +96,7 @@ export function DetailsPanel({
   onRefresh,
   /** The height the divider has been dragged to; the default comes from the CSS. */
   height,
+  fromNow,
 }: Props) {
   const t = useT();
   const [tab, setTab] = useState<Tab>("info");
@@ -309,9 +322,39 @@ export function DetailsPanel({
                 }
               />
             )}
-            <Row label={t("Added")} value={formatDate(detail.addedDate)} />
-            <Row label={t("Completed")} value={detail.doneDate > 0 ? formatDate(detail.doneDate) : "-"} />
-            <Row label={t("Last activity")} value={formatDate(detail.activityDate)} />
+            <Row
+              label={t("Added")}
+              value={dateText(detail.addedDate, fromNow)}
+              hint={dateHint(detail.addedDate, fromNow)}
+            />
+            <Row
+              label={t("Completed")}
+              value={detail.doneDate > 0 ? dateText(detail.doneDate, fromNow) : "-"}
+              hint={detail.doneDate > 0 ? dateHint(detail.doneDate, fromNow) : undefined}
+            />
+            <Row
+              label={t("Last activity")}
+              value={dateText(detail.activityDate, fromNow)}
+              hint={dateHint(detail.activityDate, fromNow)}
+            />
+            {/* The original's details pane also carries the current tracker and
+                when it is next due; 1 means an announce is in flight. */}
+            <Row label={t("Tracker")} value={detail.trackerStats?.[0]?.host || "-"} />
+            <Row
+              label={t("Update")}
+              value={
+                !detail.nextAnnounceTime
+                  ? "-"
+                  : detail.nextAnnounceTime === 1
+                    ? t("Updating…")
+                    : dateText(detail.nextAnnounceTime, fromNow)
+              }
+              hint={
+                detail.nextAnnounceTime && detail.nextAnnounceTime > 1
+                  ? dateHint(detail.nextAnnounceTime, fromNow)
+                  : undefined
+              }
+            />
             <Row
               label={t("Downloaded / seeded time")}
               value={`${formatDuration(detail.secondsDownloading, t)} / ${formatDuration(detail.secondsSeeding, t)}`}

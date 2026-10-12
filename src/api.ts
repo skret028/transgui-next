@@ -27,7 +27,7 @@ export interface TraySync {
 }
 
 export const rpc = {
-  connect: (form: ConnForm) =>
+  connect: (form: ConnForm, net?: { httpTimeout: number; connectTimeout: number }) =>
     invoke<ConnectResult>("rpc_connect", {
       config: {
         host: form.host,
@@ -45,6 +45,10 @@ export const rpc = {
         proxy_username: form.proxyUsername,
         proxy_password: form.proxyPassword,
         socks5: form.socks5,
+        // The daemon's timeouts are this app's settings, not the server's, so
+        // they are passed alongside rather than stored with a connection.
+        http_timeout_secs: net?.httpTimeout ?? null,
+        connect_timeout_secs: net?.connectTimeout ?? null,
       },
     }),
 

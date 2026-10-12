@@ -227,6 +227,39 @@ uses:
   loses it (the pane sizes, saved as they are dragged, survive), and the pane
   sizes go in the settings export where the frame does not.
 
+- **Dates as how long ago they were** (`MainForm/FromNow`) - the original
+  switches every date it prints on this one setting and shows the other form in
+  the hint; it has no way in but its INI either. Both halves are here: the
+  table's date columns and the details pane's Added, Completed and Last
+  activity, with the other form in the tooltip. The shape is the original's -
+  the two most significant units, abbreviated and never translated ("2d 3h",
+  "3mo 4d") - and years and months are counted on the calendar, so 31 January
+  to 1 March is "1mo 1d" rather than "0mo 29d".
+- **How many recent download directories to keep** (`Interface/MaxFoldersHistory`)
+  - 50 by default and settable from 10 to 99, the bounds its own FolderHistory
+    unit enforces. The number is a settings field here; the original puts it in
+    its connection dialog.
+- **The daemon timeouts** (`NetWork/HttpTimeout`, `NetWork/ConnectTimeout`) -
+  how long the daemon may take to answer (30 seconds by default, 2..999) and how
+  long the connection may take to come up (0 by default, which means the HTTP
+  timeout rather than no limit). They are applied to the HTTP client, and two
+  tests prove it by making an unreachable address give up inside the limit
+  rather than waiting on the operating system.
+- **The Add dialog's size** (`AddTorrent/Width`, `AddTorrent/Height`) - the
+  dialog can be dragged to a size and comes back that size. The original writes
+  them when the dialog closes after a successful add; this writes them whenever
+  it closes, which is the same thing with one fewer way to lose a resize.
+
+Two of the audit's small items turned out not to be gaps at all:
+
+- **The big toolbar**, which is already a View-menu item with the wider toolbar
+  and larger buttons behind it, and its own setting.
+- **`FileManagerDefault` / `FileManagerDefaultParam`** - the original compiles
+  the whole custom-file-manager path out on anything but Windows (`{$ifdef
+  mswindows}`) and opens the containing folder with the system's own tool
+  instead, which is what this does. Not a difference to close, the same as its
+  Windows-only handler registry and global hotkeys.
+
 Two bugs the closed-loop checks turned up on the way, both fixed:
 
 - Pressing **Disconnect** was undone within a second by the auto-reconnect loop.

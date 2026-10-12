@@ -6,7 +6,8 @@ import type { TFn } from "../format";
 import { useT } from "../i18n";
 import {
   formatBytes,
-  formatDate,
+  dateHint,
+  dateText,
   formatDuration,
   formatEta,
   formatPercent,
@@ -26,6 +27,8 @@ interface Props {
   selection: Set<number>;
   columns: ColumnId[];
   /** When set, the list shows these smoothed rates instead of the raw ones. */
+  /** Show dates as how long ago they were, the original's FromNow. */
+  fromNow: boolean;
   speedAvg?: Map<number, { down: number; up: number }> | null;
   onSort: (key: SortKey) => void;
   onRowClick: (id: number, e: MouseEvent) => void;
@@ -41,6 +44,7 @@ function cell(
   row: Torrent,
   id: ColumnId,
   t: TFn,
+  fromNow: boolean,
   avg?: Map<number, { down: number; up: number }> | null,
 ): ReactNode {
   switch (id) {
@@ -82,7 +86,7 @@ function cell(
         </>
       );
     case "added":
-      return formatDate(row.addedDate);
+      return dateText(row.addedDate, fromNow);
     case "downloaded":
       return formatBytes(row.downloadedEver);
     case "queue":
@@ -96,9 +100,9 @@ function cell(
     case "sizeLeft":
       return formatBytes(row.leftUntilDone);
     case "completed":
-      return row.doneDate ? formatDate(row.doneDate) : "-";
+      return row.doneDate ? dateText(row.doneDate, fromNow) : "-";
     case "active":
-      return row.activityDate ? formatDate(row.activityDate) : "-";
+      return row.activityDate ? dateText(row.activityDate, fromNow) : "-";
     case "seedingTime":
       return row.secondsSeeding ? formatDuration(row.secondsSeeding, t) : "-";
     case "seeds": {
@@ -126,6 +130,7 @@ export function TorrentTable({
   sortDir,
   selection,
   columns,
+  fromNow,
   speedAvg,
   onSort,
   onRowClick,
@@ -205,9 +210,21 @@ export function TorrentTable({
                 <td
                   key={id}
                   className={cls(id)}
-                  title={id === "name" ? row.name : id === "dir" ? row.downloadDir : undefined}
+                  title={
+                    id === "name"
+                      ? row.name
+                      : id === "dir"
+                        ? row.downloadDir
+                        : id === "added"
+                          ? dateHint(row.addedDate, fromNow)
+                          : id === "completed"
+                            ? dateHint(row.doneDate, fromNow)
+                            : id === "active"
+                              ? dateHint(row.activityDate, fromNow)
+                              : undefined
+                  }
                 >
-                  {cell(row, id, t, speedAvg)}
+                  {cell(row, id, t, fromNow, speedAvg)}
                 </td>
               ))}
             </tr>

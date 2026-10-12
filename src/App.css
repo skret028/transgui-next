@@ -1003,3 +1003,15 @@ table.sub-table td.empty {
 .splitter:hover {
   background: #3a4048;
 }
+
+/* The add dialog can be dragged to a size of its own, which is remembered.
+   `resize` needs an overflow other than visible to give the corner grip, and
+   the dialog's own body does the scrolling. */
+.modal.resizable {
+  resize: both;
+  overflow: hidden;
+  min-width: 360px;
+  min-height: 240px;
+  max-width: 96vw;
+  max-height: 92vh;
+}

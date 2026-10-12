@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import { clampHistoryLimit } from "./dirHistory";
+import { clampConnectTimeout, clampHttpTimeout } from "./netTimeouts";
 import {
   clampPane,
   detailsCeiling,
@@ -62,6 +64,16 @@ import {
   type ViewOptions,
   loadWatchSettings,
   saveWatchSettings,
+  loadFromNow,
+  saveFromNow,
+  loadHistoryLimit,
+  saveHistoryLimit,
+  loadNetTimeouts,
+  saveNetTimeouts,
+  loadAddDialogSize,
+  saveAddDialogSize,
+  type NetTimeouts,
+  type AddDialogSize,
   loadPaneSizes,
   savePaneSizes,
   DEFAULT_WATCH,
@@ -106,7 +118,8 @@ import { ConnectionBar } from "./components/ConnectionBar";
 import { SPEED_PRESETS, Toolbar } from "./components/Toolbar";
 import { TorrentTable } from "./components/TorrentTable";
 import { DetailsPanel } from "./components/DetailsPanel";
-import { pushDirHistory } from "./dirHistory";
+import { pushDirHistory, DIR_HISTORY_MAX } from "./dirHistory";
+import { HTTP_TIMEOUT_DEFAULT, CONNECT_TIMEOUT_DEFAULT } from "./netTimeouts";
 import { filePatchAll } from "./filePriority";
 import { formatBytes } from "./format";
 import { resolveShortcut } from "./shortcuts";
@@ -210,6 +223,16 @@ function AppInner() {
    * watchQueue.ts.
    */
   const [watch, setWatch] = useState<WatchSettings>(DEFAULT_WATCH);
+  /** Dates as how long ago they were, the original's FromNow. */
+  const [fromNow, setFromNow] = useState(false);
+  /** How many recent download directories the Add dialog offers. */
+  const [historyLimit, setHistoryLimit] = useState(DIR_HISTORY_MAX);
+  /** The daemon's timeouts, and the Add dialog's remembered size. */
+  const [netTimeouts, setNetTimeouts] = useState<NetTimeouts>({
+    httpTimeout: HTTP_TIMEOUT_DEFAULT,
+    connectTimeout: CONNECT_TIMEOUT_DEFAULT,
+  });
+  const [addSize, setAddSize] = useState<Partial<AddDialogSize>>({});
   const [watchOffer, setWatchOffer] = useState<string | null>(null);
   const watchWaiting = useRef<string[]>([]);
 
@@ -381,10 +404,11 @@ function AppInner() {
   const connect = useCallback(
     async (override?: ConnForm): Promise<boolean> => {
       const cfg = override ?? form;
+      const net = netTimeoutsRef.current;
       setConnecting(true);
       setError("");
       try {
-        const res = await rpc.connect(cfg);
+        const res = await rpc.connect(cfg, net);
         setConnected(true);
         setVersion(`${res.version} (rpc v${res.rpcVersion})`);
         void saveConnForm(cfg);
@@ -445,6 +469,10 @@ function AppInner() {
       setColumns(normalizeColumns(savedColumns));
       setNotifyOnComplete(notifyPref);
       setWatch(await loadWatchSettings());
+      setFromNow(await loadFromNow());
+      setHistoryLimit(await loadHistoryLimit());
+      setNetTimeouts(await loadNetTimeouts());
+      setAddSize(await loadAddDialogSize());
       const panes = await loadPaneSizes();
       setFilterWidth(panes.filterWidth);
       setDetailsHeight(panes.detailsHeight);
@@ -795,7 +823,7 @@ function AppInner() {
 
   /** Remember where a torrent was put, for the Add dialog's next use. */
   const rememberDir = useCallback((dir: string) => {
-    setDirHistory((prev) => pushDirHistory(prev, dir));
+    setDirHistory((prev) => pushDirHistory(prev, dir, historyLimitRef.current));
   }, []);
 
   // Persist the history whenever it changes. Guarded by the load flag so the
@@ -1270,6 +1298,47 @@ function AppInner() {
   useEffect(() => {
     if (!showAdd) offerNextWatch();
   }, [showAdd, offerNextWatch]);
+
+  /**
+   * The three settings the connect and add paths read, kept in refs so those
+   * paths do not have to be rebuilt when a setting changes.
+   */
+  const historyLimitRef = useRef(historyLimit);
+  const netTimeoutsRef = useRef(netTimeouts);
+  useEffect(() => {
+    historyLimitRef.current = historyLimit;
+    netTimeoutsRef.current = netTimeouts;
+  }, [historyLimit, netTimeouts]);
+
+  const changeHistoryLimit = useCallback((limit: number) => {
+    const clamped = clampHistoryLimit(limit);
+    setHistoryLimit(clamped);
+    setDirHistory((prev) => prev.slice(0, clamped));
+    void saveHistoryLimit(clamped);
+  }, []);
+
+  const changeNetTimeouts = useCallback((net: NetTimeouts) => {
+    const next = {
+      httpTimeout: clampHttpTimeout(net.httpTimeout),
+      connectTimeout: clampConnectTimeout(net.connectTimeout),
+    };
+    setNetTimeouts(next);
+    void saveNetTimeouts(next);
+  }, []);
+
+  /** The Add dialog reports its size on close; it is remembered next time. */
+  const rememberAddSize = useCallback((size: AddDialogSize) => {
+    setAddSize(size);
+    void saveAddDialogSize(size);
+  }, []);
+
+  const changeFromNow = useCallback(
+    (on: boolean) => {
+      setFromNow(on);
+      void saveFromNow(on);
+    },
+    [],
+  );
 
   const changeWatch = useCallback(
     (next: WatchSettings) => {
@@ -2073,6 +2142,7 @@ function AppInner() {
             sortDir={sortDir}
             selection={selection}
             columns={columns}
+            fromNow={fromNow}
             speedAvg={displaySpeeds}
             onSort={onSort}
             onRowClick={onRowClick}
@@ -2090,6 +2160,7 @@ function AppInner() {
               revealTarget={revealTarget}
               mapPath={mapLocalPath}
               height={detailsHeight}
+              fromNow={fromNow}
               dirHistory={dirHistory}
               onMoved={rememberDir}
               onClose={() => {
@@ -2137,6 +2208,8 @@ function AppInner() {
         <AddTorrentDialog
           initialSource={prefillSource}
           initialDownloadDir={watchOffer ? watch.destination : ""}
+          size={addSize.width && addSize.height ? { width: addSize.width, height: addSize.height } : undefined}
+          onSizeChange={rememberAddSize}
           onClose={() => {
             setShowAdd(false);
             setPrefillSource("");
@@ -2200,6 +2273,12 @@ function AppInner() {
           onTrayAlwaysVisibleChange={changeTrayAlwaysVisible}
           watch={watch}
           onWatchChange={changeWatch}
+          fromNow={fromNow}
+          onFromNowChange={changeFromNow}
+          historyLimit={historyLimit}
+          onHistoryLimitChange={changeHistoryLimit}
+          netTimeouts={netTimeouts}
+          onNetTimeoutsChange={changeNetTimeouts}
           autoReconnect={autoReconnect}
           onAutoReconnectChange={changeAutoReconnect}
           refreshSeconds={refreshSeconds}

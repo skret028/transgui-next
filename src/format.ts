@@ -1,5 +1,7 @@
 // Presentation helpers for Transmission torrent data.
 
+import { agoText } from "./relativeTime";
+
 /** Transmission `status` enum -> i18n key (translated by the caller). */
 export const STATUS_KEY: Record<number, string> = {
   0: "Stopped",
@@ -78,4 +80,24 @@ export function formatPercent(p: number | undefined | null): string {
 export function formatDate(epochSeconds: number | undefined | null): string {
   if (!epochSeconds) return "-";
   return new Date(epochSeconds * 1000).toLocaleString();
+}
+
+/**
+ * A date as the app shows it: absolute, or how long ago it was.
+ *
+ * The original turns every date it prints on one setting, and shows the other
+ * form in the hint; see relativeTime.ts for the relative shape.
+ */
+export function dateText(epochSeconds: number | undefined | null, fromNow: boolean): string {
+  if (!epochSeconds) return "-";
+  return fromNow ? agoText(Date.now() / 1000, epochSeconds) : formatDate(epochSeconds);
+}
+
+/** The other form of the same date, for the tooltip - the original's hint. */
+export function dateHint(
+  epochSeconds: number | undefined | null,
+  fromNow: boolean,
+): string | undefined {
+  if (!epochSeconds) return undefined;
+  return fromNow ? formatDate(epochSeconds) : agoText(Date.now() / 1000, epochSeconds);
 }

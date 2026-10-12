@@ -1,5 +1,5 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import type { WatchSettings } from "../settings";
+import type { NetTimeouts, WatchSettings } from "../settings";
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
@@ -65,6 +65,15 @@ interface Props {
   /** The watched folder: a place to drop .torrent files that get added for you. */
   watch: WatchSettings;
   onWatchChange: (watch: WatchSettings) => void;
+  /** Dates as how long ago they were, the original's FromNow. */
+  fromNow: boolean;
+  onFromNowChange: (on: boolean) => void;
+  /** How many recent download directories the Add dialog offers (10..99). */
+  historyLimit: number;
+  onHistoryLimitChange: (limit: number) => void;
+  /** How long the daemon may take to answer, and to be reached, in seconds. */
+  netTimeouts: NetTimeouts;
+  onNetTimeoutsChange: (net: NetTimeouts) => void;
 }
 
 interface Fields {
@@ -315,6 +324,12 @@ export function SettingsDialog({
   onHandlerChange,
   watch,
   onWatchChange,
+  fromNow,
+  onFromNowChange,
+  historyLimit,
+  onHistoryLimitChange,
+  netTimeouts,
+  onNetTimeoutsChange,
 }: Props) {
   const t = useT();
   const [fields, setFields] = useState<Fields | null>(null);
@@ -1054,6 +1069,65 @@ export function SettingsDialog({
               </p>
             </>
           )}
+
+          <div className="kv-inline">
+            <label className="chk">
+              <span>{t("Remember this many recent download directories")}</span>
+            </label>
+            <input
+              className="narrow"
+              type="number"
+              min={10}
+              max={99}
+              value={historyLimit}
+              onChange={(e) => onHistoryLimitChange(Number(e.target.value) || 50)}
+            />
+          </div>
+
+          <div className="kv-inline">
+            <label className="chk">
+              <span>{t("Answer within")}</span>
+            </label>
+            <input
+              className="narrow"
+              type="number"
+              min={2}
+              max={999}
+              value={netTimeouts.httpTimeout}
+              onChange={(e) =>
+                onNetTimeoutsChange({ ...netTimeouts, httpTimeout: Number(e.target.value) || 30 })
+              }
+            />
+            <span className="muted">{t("seconds; 0 in the next one means this")}</span>
+          </div>
+
+          <div className="kv-inline">
+            <label className="chk">
+              <span>{t("Reach the daemon within")}</span>
+            </label>
+            <input
+              className="narrow"
+              type="number"
+              min={0}
+              max={999}
+              value={netTimeouts.connectTimeout}
+              onChange={(e) =>
+                onNetTimeoutsChange({ ...netTimeouts, connectTimeout: Number(e.target.value) || 0 })
+              }
+            />
+            <span className="muted">{t("seconds; 0 uses the one above")}</span>
+          </div>
+
+          <div className="kv-inline">
+            <label className="chk">
+              <input
+                type="checkbox"
+                checked={fromNow}
+                onChange={(e) => onFromNowChange(e.target.checked)}
+              />
+              <span>{t("Show dates as how long ago they were")}</span>
+            </label>
+          </div>
 
           <div className="kv-inline">
             <label className="chk">

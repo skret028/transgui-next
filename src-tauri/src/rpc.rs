@@ -49,6 +49,13 @@ pub struct ConnConfig {
     /// style, instead of sending the address of the HTTP proxy itself.
     #[serde(default)]
     pub socks5: Option<bool>,
+    /// The daemon's HTTP timeout in seconds, as the original's [NetWork]
+    /// HttpTimeout. 2..999, anything else meaning the default of 30.
+    pub http_timeout_secs: Option<u64>,
+    /// How long the connection may take to come up, in seconds, the original's
+    /// ConnectTimeout. 1..999; 0 or absent means "the HTTP timeout", which is
+    /// what that setting means rather than "no limit".
+    pub connect_timeout_secs: Option<u64>,
 }
 
 /// Some(path) unless the field is empty, so "unset" and "" behave the same.
@@ -65,6 +72,15 @@ fn nonempty(value: &Option<String>) -> Option<String> {
 /// a real server by the ignored test below, without going through the UI.
 fn build_client(config: &ConnConfig) -> Result<reqwest::Client, String> {
     let mut builder = reqwest::Client::builder().user_agent("transgui-next/0.1");
+    // The original's [NetWork] timeouts. A connect timeout of 0 borrows the
+    // HTTP one, so a handshake is cancellable even when only that was set.
+    let http_secs = config.http_timeout_secs.unwrap_or(30).clamp(2, 999);
+    builder = builder.timeout(std::time::Duration::from_secs(http_secs));
+    let connect_secs = match config.connect_timeout_secs.unwrap_or(0) {
+        0 => http_secs,
+        n => n.clamp(1, 999),
+    };
+    builder = builder.connect_timeout(std::time::Duration::from_secs(connect_secs));
     if config.accept_invalid_certs.unwrap_or(false) {
         builder = builder.danger_accept_invalid_certs(true);
     }
@@ -831,6 +847,8 @@ mod tests {
             proxy_username: None,
             proxy_password: None,
             socks5: None,
+            http_timeout_secs: None,
+            connect_timeout_secs: None,
         }
     }
 
@@ -943,6 +961,8 @@ mod tests {
             proxy_username: None,
             proxy_password: None,
             socks5: None,
+            http_timeout_secs: None,
+            connect_timeout_secs: None,
         };
 
         let state = AppState::new();
@@ -1003,6 +1023,8 @@ mod tests {
             proxy_username: None,
             proxy_password: None,
             socks5: None,
+            http_timeout_secs: None,
+            connect_timeout_secs: None,
         };
         let client = build_client(&config).expect("client with identity");
         let call = serde_json::json!({"method": "session-get"});
@@ -1291,6 +1313,47 @@ mod tests {
     /// Reads a real .torrent, written by a real encoder rather than by the
     /// helpers above: set TXGUI_TORRENT_FILE and run
     /// `cargo test --lib -- --ignored torrent_file` to check it.
+    /// The daemon's timeouts are the original's [NetWork] settings, and the
+    /// connect one is what has to make an unreachable daemon give up: without
+    /// it the request waits on the operating system's own timeout instead.
+    ///
+    /// The address is a black hole on purpose. A test that merely builds a
+    /// client with the setting proves nothing about whether it reached it.
+    async fn time_to_give_up(http_secs: u64, connect_secs: u64) -> std::time::Duration {
+        let config = ConnConfig {
+            host: "10.255.255.1".into(), // a black hole: no route, no answer
+            port: 19091,
+            http_timeout_secs: Some(http_secs),
+            connect_timeout_secs: Some(connect_secs),
+            ..base_config()
+        };
+        let client = build_client(&config).expect("a client");
+        let started = std::time::Instant::now();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            client.get("http://10.255.255.1:19091/transmission/rpc").send(),
+        )
+        .await;
+        let elapsed = started.elapsed();
+        assert!(result.is_ok(), "the request never gave up: no timeout reached the client");
+        assert!(result.unwrap().is_err(), "a black-hole address cannot answer");
+        elapsed
+    }
+
+    #[tokio::test]
+    async fn a_connect_timeout_stops_an_unreachable_daemon() {
+        let elapsed = time_to_give_up(30, 1).await;
+        assert!(elapsed < std::time::Duration::from_secs(6), "gave up after {elapsed:?}");
+    }
+
+    #[tokio::test]
+    async fn an_unset_connect_timeout_borrows_the_http_one() {
+        // 0 is "use the HTTP timeout", not "no limit" - the same rule the
+        // original's own reader has.
+        let elapsed = time_to_give_up(1, 0).await;
+        assert!(elapsed < std::time::Duration::from_secs(6), "gave up after {elapsed:?}");
+    }
+
     #[test]
     #[ignore = "set TXGUI_TORRENT_FILE to a .torrent file"]
     fn live_reads_trackers_from_a_real_torrent_file() {

@@ -2,6 +2,8 @@
 import { load, type Store } from "@tauri-apps/plugin-store";
 import type { ConnForm, ServerBookmark } from "./types";
 import { normalizePathMap, type PathMapping } from "./paths";
+import { clampHistoryLimit, DIR_HISTORY_MAX } from "./dirHistory";
+import { clampConnectTimeout, clampHttpTimeout, CONNECT_TIMEOUT_DEFAULT, HTTP_TIMEOUT_DEFAULT } from "./netTimeouts";
 import {
   clampPane,
   DEFAULT_DETAILS_HEIGHT,
@@ -474,6 +476,104 @@ export interface WatchSettings {
   intervalMinutes: number;
   /** Download directory for what is found; empty keeps the dialog's own default. */
   destination: string;
+}
+
+/** Whether every date the app prints is shown as how long ago it was. */
+const FROM_NOW_KEY = "fromNow";
+
+/** How many recent download directories the Add dialog offers. */
+const HISTORY_LIMIT_KEY = "folderHistoryLimit";
+
+export async function loadHistoryLimit(): Promise<number> {
+  try {
+    const store = await getStore();
+    return clampHistoryLimit((await store.get<number>(HISTORY_LIMIT_KEY)) ?? DIR_HISTORY_MAX);
+  } catch {
+    return DIR_HISTORY_MAX;
+  }
+}
+
+export async function saveHistoryLimit(limit: number): Promise<void> {
+  const store = await getStore();
+  await store.set(HISTORY_LIMIT_KEY, clampHistoryLimit(limit));
+  await store.save();
+}
+
+/**
+ * How long the daemon may take to answer, and to be reached.
+ *
+ * Both are this app's own [NetWork] settings in the original and belong to no
+ * particular server, so they are not part of a saved connection.
+ */
+export interface NetTimeouts {
+  httpTimeout: number;
+  connectTimeout: number;
+}
+
+const HTTP_TIMEOUT_KEY = "httpTimeout";
+const CONNECT_TIMEOUT_KEY = "connectTimeout";
+
+export async function loadNetTimeouts(): Promise<NetTimeouts> {
+  try {
+    const store = await getStore();
+    return {
+      httpTimeout: clampHttpTimeout((await store.get<number>(HTTP_TIMEOUT_KEY)) ?? HTTP_TIMEOUT_DEFAULT),
+      connectTimeout: clampConnectTimeout(
+        (await store.get<number>(CONNECT_TIMEOUT_KEY)) ?? CONNECT_TIMEOUT_DEFAULT,
+      ),
+    };
+  } catch {
+    return { httpTimeout: HTTP_TIMEOUT_DEFAULT, connectTimeout: CONNECT_TIMEOUT_DEFAULT };
+  }
+}
+
+export async function saveNetTimeouts(net: NetTimeouts): Promise<void> {
+  const store = await getStore();
+  await store.set(HTTP_TIMEOUT_KEY, clampHttpTimeout(net.httpTimeout));
+  await store.set(CONNECT_TIMEOUT_KEY, clampConnectTimeout(net.connectTimeout));
+  await store.save();
+}
+
+/** The add dialog's size, remembered between runs as the original does. */
+export interface AddDialogSize {
+  width: number;
+  height: number;
+}
+
+const ADD_WIDTH_KEY = "addDialogWidth";
+const ADD_HEIGHT_KEY = "addDialogHeight";
+
+export async function loadAddDialogSize(): Promise<Partial<AddDialogSize>> {
+  try {
+    const store = await getStore();
+    const width = await store.get<number>(ADD_WIDTH_KEY);
+    const height = await store.get<number>(ADD_HEIGHT_KEY);
+    return { ...(width ? { width } : {}), ...(height ? { height } : {}) };
+  } catch {
+    return {};
+  }
+}
+
+export async function saveAddDialogSize(size: AddDialogSize): Promise<void> {
+  const store = await getStore();
+  await store.set(ADD_WIDTH_KEY, Math.round(size.width));
+  await store.set(ADD_HEIGHT_KEY, Math.round(size.height));
+  await store.save();
+}
+
+export async function loadFromNow(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(FROM_NOW_KEY)) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+export async function saveFromNow(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(FROM_NOW_KEY, on);
+  await store.save();
 }
 
 const WATCH_FOLDER_KEY = "watchFolder";

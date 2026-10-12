@@ -665,5 +665,11 @@
   "Select the folder to watch": "选择要监视的目录",
   "Select a download folder": "选择下载目录",
   "That folder is not there.": "这个目录不存在。",
-  "That folder cannot be written to.": "这个目录不可写。"
+  "That folder cannot be written to.": "这个目录不可写。",
+  "Show dates as how long ago they were": "日期显示为「距今」（如 2d 3h）",
+  "Remember this many recent download directories": "记住最近下载目录数量",
+  "Answer within": "响应超时",
+  "Reach the daemon within": "连接超时",
+  "seconds; 0 in the next one means this": "秒；下面填 0 就用这个值",
+  "seconds; 0 uses the one above": "秒；0 表示用上面那个值"
 }

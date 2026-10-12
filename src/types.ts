@@ -19,6 +19,8 @@ export interface Torrent {
   addedDate: number;
   doneDate: number;
   activityDate: number;
+  /** When the next tracker announce is due; 1 means one is in flight. */
+  nextAnnounceTime?: number;
   isPrivate: boolean;
   isFinished: boolean;
   isStalled: boolean;
