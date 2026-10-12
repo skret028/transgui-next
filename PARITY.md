@@ -165,8 +165,8 @@ keys, both noted in the shortcut row). Every gap it turned up is now closed:
   registry under `{$ifdef mswindows}`; on macOS the same intent is a
   LaunchServices call. Nothing about it is stored by this app - the settings
   file has no entry for it, and the checkboxes are filled from the system's own
-  answer, which is read when the app starts. Change the handler elsewhere and
-  the settings will disagree until the app is started again.
+  answer, read when the settings are opened (and re-read each time they are
+  opened, so a change made elsewhere shows up without restarting).
 
 Two differences worth naming. The URL type comes out as `CFBundleTypeRole
 Editor` because that is the deep-link plugin's default, where the original

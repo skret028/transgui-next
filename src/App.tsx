@@ -1105,11 +1105,36 @@ function AppInner() {
   /** Hand a scheme or file type to this app, or say why that cannot be done. */
   const changeHandler = useCallback(async (kind: "magnet" | "torrent", on: boolean) => {
     try {
-      setHandler(await rpc.setHandler(kind, on));
+      await rpc.setHandler(kind, on);
+      // Deliberately not the state the command returns: reading a handler back
+      // goes through the same LaunchServices query, and its answer can still be
+      // the previous one for a moment after a write that worked. The box would
+      // then look untouched right after a change that took, which reads as a
+      // click that missed. The write returning Ok is the answer.
+      setHandler((prev) => ({ ...prev, [kind]: on }));
     } catch (e) {
       setError(String(e));
     }
   }, []);
+
+  // Opening the settings re-reads it. This is the system's setting and not
+  // something this app stores, so anything done to it elsewhere since the app
+  // started would otherwise be shown wrongly until the next start.
+  useEffect(() => {
+    if (!showSettings) return;
+    let live = true;
+    void rpc
+      .handlerState()
+      .then((s) => {
+        if (live) setHandler(s);
+      })
+      .catch(() => {
+        /* not available on this platform */
+      });
+    return () => {
+      live = false;
+    };
+  }, [showSettings]);
 
   const changeMinimizeToTray = useCallback((on: boolean) => {
     setMinimizeToTray(on);
