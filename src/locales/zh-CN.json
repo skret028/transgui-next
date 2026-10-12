@@ -655,5 +655,5 @@
   "Let the system open these with transgui-next:": "让系统用 transgui-next 打开这些：",
   "Handle .torrent files": "处理 .torrent 文件",
   "Handle magnet links": "处理 magnet 链接",
-  "This changes the system's own default handler; it cannot be undone here, only handed to another app.": "这里改的是系统自己的默认处理方式；不能在本程序里改回“无人处理”，只能改成别的应用。"
+  "This changes the system's own default handler. Once a type is this app's the box stays ticked: macOS can pass it to another app but not back to nobody.": "这里改的是系统自己的默认处理方式。一旦某类文件交给了本程序就保持勾选：macOS 只能把它交给别的应用，不能交还给「无人处理」。"
 }

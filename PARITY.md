@@ -166,7 +166,11 @@ keys, both noted in the shortcut row). Every gap it turned up is now closed:
   LaunchServices call. Nothing about it is stored by this app - the settings
   file has no entry for it, and the checkboxes are filled from the system's own
   answer, read when the settings are opened (and re-read each time they are
-  opened, so a change made elsewhere shows up without restarting).
+  opened, so a change made elsewhere shows up without restarting). Once a type
+  is this app's, the box is shown ticked and stops being clickable, where the
+  original's can be unticked: macOS offers no way to hand a type back to nobody,
+  only to pass it to another app, and a control that accepts a click only to
+  refuse it reads as broken.
 
 Two differences worth naming. The URL type comes out as `CFBundleTypeRole
 Editor` because that is the deep-link plugin's default, where the original

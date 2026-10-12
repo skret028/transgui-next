@@ -276,6 +276,11 @@ input.mono {
   font-size: calc(12px * var(--ui-scale));
   user-select: none;
 }
+/* A handler box for something this app already opens: shown ticked and not
+   clickable, so it reads as set rather than as a control ignoring clicks. */
+.chk:has(input:disabled) {
+  color: #6b747e;
+}
 
 /* ---- main table ---- */
 /* ---- filter pane + list column ---- */

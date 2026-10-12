@@ -998,10 +998,17 @@ export function SettingsDialog({
           {handler.supported && (
             <>
               <p className="muted">{t("Let the system open these with transgui-next:")}</p>
+              {/* Once one of these is this app's, the box is shown ticked and
+                  left alone: there is nothing for a click to do, because macOS
+                  has no way to hand a type back to nobody, only to pass it to
+                  another app - which is done in the system's own settings, not
+                  here. Letting the click through only to refuse it reads as a
+                  broken control. */}
               <label className="chk">
                 <input
                   type="checkbox"
                   checked={handler.torrent}
+                  disabled={handler.torrent}
                   onChange={(e) => onHandlerChange("torrent", e.target.checked)}
                 />
                 {t("Handle .torrent files")}
@@ -1010,12 +1017,13 @@ export function SettingsDialog({
                 <input
                   type="checkbox"
                   checked={handler.magnet}
+                  disabled={handler.magnet}
                   onChange={(e) => onHandlerChange("magnet", e.target.checked)}
                 />
                 {t("Handle magnet links")}
               </label>
               <p className="muted">
-                {t("This changes the system's own default handler; it cannot be undone here, only handed to another app.")}
+                {t("This changes the system's own default handler. Once a type is this app's the box stays ticked: macOS can pass it to another app but not back to nobody.")}
               </p>
             </>
           )}
