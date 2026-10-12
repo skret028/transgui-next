@@ -16,6 +16,7 @@ use tauri::menu::{
 };
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 /// Set to true when the user really wants to exit (tray menu), so the close
 /// button can hide-to-tray instead of quitting.
@@ -606,6 +607,19 @@ pub fn run() {
             for arg in std::env::args().skip(1).filter(|a| is_openable(a)) {
                 queue_open(&handle, arg);
             }
+            // Magnet links are URLs, and macOS delivers those as an Apple Event
+            // rather than a file-open, so they never reach RunEvent::Opened -
+            // which is why a .torrent arrived while a magnet quietly did
+            // nothing. The deep-link plugin owns that event; this is where it
+            // hands what it caught over to the same queue, so a magnet goes to
+            // the Add dialog whether the app was running or is being woken by
+            // the link.
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    queue_open(&handle, url.to_string());
+                }
+            });
             Ok(())
         })
         .on_window_event(|window, event| {

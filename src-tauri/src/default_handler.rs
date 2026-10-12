@@ -63,14 +63,23 @@ mod mac {
     /// installed that declares the type, `.torrent` has only a dynamic UTI,
     /// derived from the extension, and an invented identifier would set a
     /// handler nobody consults.
+    ///
+    /// The conforming type is not decoration. Asking for the extension alone
+    /// returns a *different* dynamic identifier (`dyn.age81k55wsmw067a`) from
+    /// the one LaunchServices keeps for that extension in its own database
+    /// (`dyn.ah62d4rv4ge81k55wsmw067a`), and setting a handler with the former
+    /// fails with OSStatus -50 - accepted by nothing, refused by everything.
+    /// Passing `public.data` as what the type conforms to yields the identifier
+    /// LaunchServices actually uses.
     fn torrent_uti() -> Option<String> {
         let class = unsafe { kUTTagClassFilenameExtension };
         let ext = CFString::new("torrent");
+        let data = CFString::new("public.data");
         let uti = unsafe {
             UTTypeCreatePreferredIdentifierForTag(
                 class,
                 ext.as_concrete_TypeRef(),
-                std::ptr::null(),
+                data.as_concrete_TypeRef(),
             )
         };
         if uti.is_null() {

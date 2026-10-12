@@ -163,8 +163,10 @@ keys, both noted in the shortcut row). Every gap it turned up is now closed:
   the app can ask for it: the settings gain the original's two checkboxes for
   the platforms where asking is possible. The original's pair write the Windows
   registry under `{$ifdef mswindows}`; on macOS the same intent is a
-  LaunchServices call, and the state shown is the system's answer, not a cached
-  preference — change it in Finder and the checkbox follows.
+  LaunchServices call. Nothing about it is stored by this app - the settings
+  file has no entry for it, and the checkboxes are filled from the system's own
+  answer, which is read when the app starts. Change the handler elsewhere and
+  the settings will disagree until the app is started again.
 
 Two differences worth naming. The URL type comes out as `CFBundleTypeRole
 Editor` because that is the deep-link plugin's default, where the original
