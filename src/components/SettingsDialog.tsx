@@ -1074,13 +1074,11 @@ export function SettingsDialog({
             <label className="chk">
               <span>{t("Remember this many recent download directories")}</span>
             </label>
-            <input
-              className="narrow"
-              type="number"
+            <NumberField
               min={10}
               max={99}
               value={historyLimit}
-              onChange={(e) => onHistoryLimitChange(Number(e.target.value) || 50)}
+              onCommit={onHistoryLimitChange}
             />
           </div>
 
@@ -1088,15 +1086,11 @@ export function SettingsDialog({
             <label className="chk">
               <span>{t("Answer within")}</span>
             </label>
-            <input
-              className="narrow"
-              type="number"
+            <NumberField
               min={2}
               max={999}
               value={netTimeouts.httpTimeout}
-              onChange={(e) =>
-                onNetTimeoutsChange({ ...netTimeouts, httpTimeout: Number(e.target.value) || 30 })
-              }
+              onCommit={(httpTimeout) => onNetTimeoutsChange({ ...netTimeouts, httpTimeout })}
             />
             <span className="muted">{t("seconds; 0 in the next one means this")}</span>
           </div>
@@ -1105,15 +1099,11 @@ export function SettingsDialog({
             <label className="chk">
               <span>{t("Reach the daemon within")}</span>
             </label>
-            <input
-              className="narrow"
-              type="number"
+            <NumberField
               min={0}
               max={999}
               value={netTimeouts.connectTimeout}
-              onChange={(e) =>
-                onNetTimeoutsChange({ ...netTimeouts, connectTimeout: Number(e.target.value) || 0 })
-              }
+              onCommit={(connectTimeout) => onNetTimeoutsChange({ ...netTimeouts, connectTimeout })}
             />
             <span className="muted">{t("seconds; 0 uses the one above")}</span>
           </div>
@@ -1364,5 +1354,50 @@ export function SettingsDialog({
         </div>
       )}
     </Modal>
+  );
+}
+
+/**
+ * A number field that leaves what is being typed alone until the field is left.
+ *
+ * Clamping on every keystroke makes whole ranges unreachable: the history limit
+ * bottoms out at 10, so typing 12 turns the single "1" into "10" and the "2"
+ * then lands on the end of that, reading 102 and clamping to 99 - there is no
+ * way to type a two-digit number in the tens. The original's spin edits check
+ * the range when the field is left, and this does the same.
+ */
+function NumberField({
+  value,
+  min,
+  max,
+  onCommit,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    const typed = draft.trim();
+    if (typed === "") return;
+    const number = Number(typed);
+    if (Number.isFinite(number)) onCommit(number);
+  };
+  return (
+    <input
+      className="narrow"
+      type="number"
+      min={min}
+      max={max}
+      value={draft ?? String(value)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+    />
   );
 }

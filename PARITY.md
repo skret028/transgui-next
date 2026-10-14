@@ -268,6 +268,19 @@ Two bugs the closed-loop checks turned up on the way, both fixed:
   dropped and one the user ended.
 - The **column order** bug above, found because the settings file did not change
   after Apply.
+- The Add dialog's size was **never actually written**. The size was read off the
+  dialog's box when the dialog went away, but React detaches a ref before it
+  runs the effect cleanup, so the box was already null and the write silently
+  did nothing. The size is now followed with a `ResizeObserver` while the dialog
+  is still up, and only reported at the end. The field only appeared to work
+  because a drag that misses the resize grip is released outside the dialog and
+  closes it, which reads as "it resized" if you are only watching the dialog
+  disappear.
+- Clamping a **number field on every keystroke** makes parts of its own range
+  unreachable: the directory history bottoms out at 10, so typing 12 turns the
+  lone "1" into "10", the "2" then lands on the end of it, and the field settles
+  on 99. The three number fields now hold what is being typed and check the
+  range when the field is left, which is what the original's spin edits do.
 
 ## Ahead of the original
 

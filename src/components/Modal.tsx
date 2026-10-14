@@ -26,17 +26,33 @@ export function Modal({
 }: Props) {
   const t = useT();
   const box = useRef<HTMLDivElement>(null);
+  /** The size as last seen while the dialog was still up. */
+  const lastSize = useRef<{ width: number; height: number } | null>(null);
 
   // The size is reported once, when the dialog goes away, which is when the
-  // original writes its add dialog's size out. The callback is expected to be
-  // stable: it is an effect dependency, so an inline one would fire early.
+  // original writes its add dialog's size out. It cannot be read off the box at
+  // that point: React detaches the ref before the cleanup runs, so the ref is
+  // null by then and the report never happened. The size is followed while the
+  // dialog is up instead. The callback is expected to be stable: it is an
+  // effect dependency, so an inline one would fire early.
   useEffect(() => {
     if (!resizable || !onResizeEnd) return;
-    return () => {
-      const el = box.current;
-      if (!el) return;
+    const el = box.current;
+    if (!el) return;
+    const note = () => {
       const rect = el.getBoundingClientRect();
-      onResizeEnd({ width: Math.round(rect.width), height: Math.round(rect.height) });
+      lastSize.current = { width: Math.round(rect.width), height: Math.round(rect.height) };
+    };
+    note();
+    const observer = new ResizeObserver(note);
+    observer.observe(el);
+    // A drag can end and the dialog close in the same frame, ahead of the
+    // observer's callback, so the size is noted on release as well.
+    el.addEventListener("pointerup", note);
+    return () => {
+      observer.disconnect();
+      el.removeEventListener("pointerup", note);
+      if (lastSize.current) onResizeEnd(lastSize.current);
     };
   }, [resizable, onResizeEnd]);
 
