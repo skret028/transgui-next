@@ -1,6 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import type { NetTimeouts, WatchSettings } from "../settings";
 import { useEffect, useState } from "react";
+import { DEFAULT_SPEEDS } from "../speedPresets";
 import { Modal } from "./Modal";
 import { useT } from "../i18n";
 import { rpc, type GeoIpStatus, type UpdateInfo } from "../api";
@@ -55,6 +56,13 @@ interface Props {
   /** Client-side: delete the local .torrent once the daemon has taken it. */
   deleteTorrentFile: boolean;
   onDeleteTorrentFileChange: (on: boolean) => void;
+  promptAddOptions: boolean;
+  onPromptAddOptionsChange: (on: boolean) => void;
+  /** The speed-limit menu items, as typed (comma separated). */
+  downSpeeds: string;
+  upSpeeds: string;
+  onDownSpeedsChange: (text: string) => void;
+  onUpSpeedsChange: (text: string) => void;
   /** Client-side: how often to look for a new version. 0 turns it off. */
   updateCheckDays: number;
   onUpdateCheckDaysChange: (days: number) => void;
@@ -318,6 +326,12 @@ export function SettingsDialog({
   onRefreshSecondsChange,
   deleteTorrentFile,
   onDeleteTorrentFileChange,
+  promptAddOptions,
+  onPromptAddOptionsChange,
+  downSpeeds,
+  upSpeeds,
+  onDownSpeedsChange,
+  onUpSpeedsChange,
   updateCheckDays,
   onUpdateCheckDaysChange,
   handler,
@@ -1028,6 +1042,18 @@ export function SettingsDialog({
           <label className="chk">
             <input
               type="checkbox"
+              checked={promptAddOptions}
+              onChange={(e) => onPromptAddOptionsChange(e.target.checked)}
+            />
+            {t("Prompt for download options when adding a new torrent")}
+          </label>
+          <p className="muted">
+            {t("Off, a torrent goes in as it arrives with every file wanted, and the dialog never asks about files, the name or the peer limit.")}
+          </p>
+
+          <label className="chk">
+            <input
+              type="checkbox"
               checked={deleteTorrentFile}
               onChange={(e) => onDeleteTorrentFileChange(e.target.checked)}
             />
@@ -1035,6 +1061,24 @@ export function SettingsDialog({
           </label>
           <p className="muted">
             {t("The file on this machine, not the daemon's own copy — the daemon is sent the metainfo and never sees it.")}
+          </p>
+
+          {/* The original's "Speed limit menu items", which live in its
+              connection dialog because it keeps one list per connection. The
+              lists are offered in the toolbar's speed drop-downs; entries that
+              are not whole numbers are ignored, and the list is shown in
+              ascending order however it was typed. */}
+          <div className="group">{t("Speed limit menu items")}</div>
+          <label className="row">
+            <span>{t("Download speeds (KB/s):")}</span>
+            <TextField value={downSpeeds} onCommit={onDownSpeedsChange} placeholder={DEFAULT_SPEEDS} />
+          </label>
+          <label className="row">
+            <span>{t("Upload speeds (KB/s):")}</span>
+            <TextField value={upSpeeds} onCommit={onUpSpeedsChange} placeholder={DEFAULT_SPEEDS} />
+          </label>
+          <p className="muted">
+            {t("Comma separated. 0 is a limit of zero; Unlimited turns the limit off entirely.")}
           </p>
 
           {handler.supported && (
@@ -1393,6 +1437,44 @@ function NumberField({
       min={min}
       max={max}
       value={draft ?? String(value)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+    />
+  );
+}
+
+/**
+ * A free-text preference that is only sent on when the field is left.
+ *
+ * The speed-limit lists are typed as comma-separated numbers, and a half-typed
+ * list is not a list: committing per keystroke would strip the comma the moment
+ * it was typed and rewrite the field under the cursor. The original edits them
+ * in an ordinary text box and reads the box when the dialog is closed.
+ */
+function TextField({
+  value,
+  placeholder,
+  onCommit,
+}: {
+  value: string;
+  placeholder?: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    setDraft(null);
+    if (draft !== value) onCommit(draft);
+  };
+  return (
+    <input
+      className="wide"
+      type="text"
+      value={draft ?? value}
+      placeholder={placeholder}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

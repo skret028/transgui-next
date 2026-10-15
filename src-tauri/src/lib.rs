@@ -560,6 +560,22 @@ pub fn run() {
     // mutual TLS needs it and fails otherwise.
     let _ = rustls::crypto::ring::default_provider().install_default();
     let app = tauri::Builder::default()
+        // Registered ahead of everything else: a second launch has to be able to
+        // stop the run before any of the app is set up, and it hands its command
+        // line over on the way out. That is what the original's single-instance
+        // check does - the second copy passes its torrent to the first and
+        // leaves - and it is what keeps two copies from fighting over the same
+        // settings file and window geometry.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            for arg in argv.iter().filter(|a| is_openable(a)) {
+                queue_open(app, arg.clone());
+            }
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.unminimize();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())

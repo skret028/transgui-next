@@ -15,6 +15,12 @@ export interface AddChoices {
   unwanted: number[];
   /** Start it once the choices are in (the original's "start torrent"). */
   start: boolean;
+  /**
+   * Delete the local `.torrent` afterwards whatever the stored option says.
+   * A file that arrived through the watched folder is deleted this way: leaving
+   * it would have the folder offer it again on the next look.
+   */
+  deleteLocalFile?: boolean;
 }
 
 interface Props {
@@ -30,6 +36,19 @@ interface Props {
   onDiscard: (id: number) => Promise<void>;
   /** When true, the dialog is shown right after connecting. */
   defaultPaused?: boolean;
+  /**
+   * Show the download-options stage. With it off the torrent goes in as soon as
+   * it is handed over, with every file wanted and nothing asked - the original's
+   * `Interface/ShowAddTorrentWindow`, whose off state skips this very stage.
+   */
+  promptOptions?: boolean;
+  /**
+   * The remembered answer for the "start torrent" box. The original keeps it in
+   * `Interface/StartTorrentOnAdd`, and a torrent that arrived from the watched
+   * folder follows it too, having never seen this dialog.
+   */
+  startOnAdd?: boolean;
+  onStartOnAddChange?: (on: boolean) => void;
   /** Pre-fill the magnet/URL field (e.g. a link found on the clipboard). */
   initialSource?: string;
   /**
@@ -50,6 +69,9 @@ export function AddTorrentDialog({
   onApply,
   onDiscard,
   defaultPaused = false,
+  promptOptions = true,
+  startOnAdd = true,
+  onStartOnAddChange,
   initialSource = "",
   initialDownloadDir = "",
   dirHistory = [],
@@ -71,7 +93,7 @@ export function AddTorrentDialog({
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [name, setName] = useState("");
   const [peerLimit, setPeerLimit] = useState(0);
-  const [start, setStart] = useState(!defaultPaused);
+  const [start, setStart] = useState(startOnAdd);
   const [free, setFree] = useState<number | null>(null);
 
   const pickFile = async () => {
@@ -121,10 +143,23 @@ export function AddTorrentDialog({
         paused: true,
       });
       if (!info) return;
+      // "Prompt for download options" off: the torrent is in already, with every
+      // file wanted, so there is nothing to ask. The original takes this same
+      // branch and marks all files wanted before it goes on.
+      if (!promptOptions) {
+        await onApply(info, {
+          name: "",
+          peerLimit: info.peerLimit,
+          wanted: [],
+          unwanted: [],
+          start: paused ? false : startOnAdd,
+        });
+        return;
+      }
       setPrepared(info);
       setName(info.name);
       setPeerLimit(info.peerLimit);
-      setStart(!paused);
+      setStart(paused ? false : startOnAdd);
       setChecked(new Set(info.files.map((_, i) => i)));
     } finally {
       setBusy(false);
@@ -249,7 +284,17 @@ export function AddTorrentDialog({
         )}
 
         <label className="chk">
-          <input type="checkbox" checked={start} onChange={(e) => setStart(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={start}
+            onChange={(e) => {
+              setStart(e.target.checked);
+              // Remembered the way the original remembers it, so the next add -
+              // and a torrent that arrives through the watched folder, which
+              // never opens this dialog - follows the same answer.
+              onStartOnAddChange?.(e.target.checked);
+            }}
+          />
           {t("Start after adding")}
         </label>
       </Modal>

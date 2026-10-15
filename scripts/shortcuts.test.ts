@@ -277,6 +277,90 @@ eq(
 eq(resolveShortcut(key("F2", { metaKey: true }), list), null, "Cmd+F2 is not F2");
 eq(resolveShortcut(key("F6", { altKey: true }), list), null, "Alt+F6 is not F6");
 
+// The Alt namespace, which the original hangs off the form itself. It is matched
+// on the physical key, so it survives a layout that has moved the letter.
+eq(
+  resolveShortcut(key("s", { altKey: true, code: "KeyS" }), list),
+  { kind: "focus-search" },
+  "Alt+S jumps to the filter box",
+);
+eq(
+  resolveShortcut(key("g", { altKey: true, code: "KeyG" }), list),
+  { kind: "detail-tab", tab: "info" },
+  "Alt+G is the General page",
+);
+eq(
+  resolveShortcut(key("k", { altKey: true, code: "KeyK" }), list),
+  { kind: "detail-tab", tab: "trackers" },
+  "Alt+K is the Trackers page",
+);
+eq(
+  resolveShortcut(key("p", { altKey: true, code: "KeyP" }), list),
+  { kind: "detail-tab", tab: "peers" },
+  "Alt+P is the Peers page",
+);
+eq(
+  resolveShortcut(key("f", { altKey: true, code: "KeyF" }), list),
+  { kind: "detail-tab", tab: "files" },
+  "Alt+F is the Files page",
+);
+
+// Alt+1..Alt+8 pick the filter rows in order, counting from the top.
+eq(
+  resolveShortcut(key("1", { altKey: true, code: "Digit1" }), list),
+  { kind: "filter-row", row: 0 },
+  "Alt+1 is the first row",
+);
+eq(
+  resolveShortcut(key("8", { altKey: true, code: "Digit8" }), list),
+  { kind: "filter-row", row: 7 },
+  "Alt+8 is the eighth row",
+);
+// There are eight rows, so a ninth key is nothing.
+eq(resolveShortcut(key("9", { altKey: true, code: "Digit9" }), list), null, "Alt+9 is unbound");
+
+// The letters are the original's own, and it has no Alt+E or Alt+T.
+eq(resolveShortcut(key("e", { altKey: true, code: "KeyE" }), list), null, "Alt+E is unbound");
+eq(resolveShortcut(key("t", { altKey: true, code: "KeyT" }), list), null, "Alt+T is unbound");
+// Shift and Cmd are not part of it.
+eq(
+  resolveShortcut(key("s", { altKey: true, shiftKey: true, code: "KeyS" }), list),
+  null,
+  "Alt+Shift+S is not Alt+S",
+);
+eq(
+  resolveShortcut(key("s", { altKey: true, metaKey: true, code: "KeyS" }), list),
+  null,
+  "Cmd+Alt+S is not Alt+S",
+);
+
+// None of it needs a connection: the filter rows and the details pages are the
+// window's own furniture, not the daemon's.
+eq(
+  resolveShortcut(key("3", { altKey: true, code: "Digit3" }), ctx({ connected: false })),
+  { kind: "filter-row", row: 2 },
+  "the filter rows work while disconnected",
+);
+eq(
+  resolveShortcut(key("s", { altKey: true, code: "KeyS" }), ctx({ connected: false })),
+  { kind: "focus-search" },
+  "the filter box works while disconnected",
+);
+
+// But a text field keeps them: on macOS Alt+letter is how an accent or a symbol
+// is typed, and taking those keys would break every dialog in a non-English
+// layout. (A deliberate difference from the original, which claims them anyway.)
+eq(
+  resolveShortcut(key("s", { altKey: true, code: "KeyS" }), ctx({ typing: true })),
+  null,
+  "Alt+S is left to a text field",
+);
+eq(
+  resolveShortcut(key("1", { altKey: true, code: "Digit1" }), ctx({ typing: true })),
+  null,
+  "Alt+1 is left to a text field",
+);
+
 console.log(`shortcuts: ${passed} assertions passed`);
 
 if (failures.length > 0) {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ask } from "@tauri-apps/plugin-dialog";
 import type { TorrentDetail } from "../types";
 import { useT } from "../i18n";
 import { rpc } from "../api";
@@ -41,9 +42,16 @@ interface Props {
   onMoved?: (location: string) => void;
   onClose: () => void;
   onRefresh: () => void;
+  /**
+   * Which page is showing. Held by the caller so the original's Alt+G/K/P/F can
+   * jump straight to one; the panel itself only reports the tab that was
+   * clicked.
+   */
+  tab: Tab;
+  onTabChange: (tab: Tab) => void;
 }
 
-type Tab = "info" | "files" | "peers" | "trackers";
+export type Tab = "info" | "files" | "peers" | "trackers";
 
 /**
  * Regional-indicator pair for a two-letter country code, so flags need no image
@@ -97,9 +105,11 @@ export function DetailsPanel({
   /** The height the divider has been dragged to; the default comes from the CSS. */
   height,
   fromNow,
+  tab,
+  onTabChange,
 }: Props) {
   const t = useT();
-  const [tab, setTab] = useState<Tab>("info");
+  const setTab = onTabChange;
   const [copied, setCopied] = useState("");
   const [renaming, setRenaming] = useState<{ path: string; initial: string } | null>(null);
   const [trackerAdd, setTrackerAdd] = useState(false);
@@ -189,6 +199,24 @@ export function DetailsPanel({
       // Best-effort: the next poll shows whatever the daemon actually has.
     } finally {
       setFilesBusy(false);
+    }
+  };
+
+  /**
+   * Remove a tracker, after asking - the original asks from both its Remove
+   * button and its Delete key, and answers "no" by default.
+   */
+  const removeTracker = async (id: number, announce: string) => {
+    const ok = await ask(t("Are you sure to remove tracker '%s'?", { 1: announce }), {
+      title: t("Remove tracker"),
+      kind: "warning",
+    });
+    if (!ok) return;
+    try {
+      await rpc.setTorrent([detail.id], { trackerRemove: [id] });
+      onRefresh();
+    } catch {
+      // Best-effort: the next poll shows whatever the daemon actually has.
     }
   };
 
@@ -323,6 +351,11 @@ export function DetailsPanel({
               />
             )}
             <Row
+              label={t("Created on")}
+              value={detail.dateCreated ? dateText(detail.dateCreated, fromNow) : "-"}
+              hint={detail.dateCreated ? dateHint(detail.dateCreated, fromNow) : undefined}
+            />
+            <Row
               label={t("Added")}
               value={dateText(detail.addedDate, fromNow)}
               hint={dateHint(detail.addedDate, fromNow)}
@@ -360,6 +393,17 @@ export function DetailsPanel({
               value={`${formatDuration(detail.secondsDownloading, t)} / ${formatDuration(detail.secondsSeeding, t)}`}
             />
             <Row label={t("Pieces")} value={`${detail.pieceCount} × ${formatBytes(detail.pieceSize)}`} />
+            {/* The original counts the failed pieces by dividing the wasted bytes
+                by the piece size, and shows both. */}
+            {!!detail.corruptEver && (
+              <Row
+                label={t("Wasted")}
+                value={t("%s (%d hashfails)", {
+                  1: formatBytes(detail.corruptEver),
+                  2: detail.pieceSize > 0 ? Math.round(detail.corruptEver / detail.pieceSize) : 0,
+                })}
+              />
+            )}
             <Row
               label={t("Speed limits")}
               value={`↓ ${detail.downloadLimited ? formatSpeed(detail.downloadLimit) : t("Unlimited")} · ↑ ${
@@ -566,7 +610,19 @@ export function DetailsPanel({
                   </tr>
                 )}
                 {trackers.map((tr) => (
-                  <tr key={tr.id}>
+                  <tr
+                    key={tr.id}
+                    // Focusable so the original's Delete key works: the grid
+                    // there deletes the row it has the cursor on. The key is not
+                    // in the shortcut table because it only means anything while
+                    // this table has focus.
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Delete" && e.key !== "Backspace") return;
+                      e.preventDefault();
+                      void removeTracker(tr.id, tr.announce);
+                    }}
+                  >
                     <td className="mono ellipsis" title={tr.announce}>
                       {tr.host || tr.announce}
                     </td>
@@ -587,12 +643,7 @@ export function DetailsPanel({
                       <button
                         className="btn icon small danger"
                         title={t("Remove tracker")}
-                        onClick={() => {
-                          void (async () => {
-                            await rpc.setTorrent([detail.id], { trackerRemove: [tr.id] });
-                            onRefresh();
-                          })();
-                        }}
+                        onClick={() => void removeTracker(tr.id, tr.announce)}
                       >
                         ✕
                       </button>

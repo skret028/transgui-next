@@ -30,25 +30,32 @@ interface Props {
   onSetSpeed: (which: "down" | "up", kbps: number | null) => void;
   /** Refresh the cached session so the menus show the daemon's current values. */
   onLoadSession: () => void;
+  /** The connection's speed-limit menu items, already parsed and ordered. */
+  speedDownItems: number[];
+  speedUpItems: number[];
 }
 
-/** Presets shared by both directions; 0 means unlimited (handled as a null). */
-export const SPEED_PRESETS = [1, 5, 10, 50, 100, 500];
-
+/**
+ * The speed drop-downs: the connection's menu items, plus the limit in force so
+ * a custom one can always be picked back. An empty value is "Unlimited", which
+ * is how a disabled limit is shown - the daemon's own convention.
+ */
 function SpeedSelect({
   label,
   kbps,
   enabled,
+  presets,
   onChange,
 }: {
   label: string;
   kbps: number;
   enabled: boolean;
+  presets: number[];
   onChange: (kbps: number | null) => void;
 }) {
   const t = useT();
   const value = enabled ? String(kbps) : "";
-  const custom = enabled && kbps > 0 && !SPEED_PRESETS.includes(kbps);
+  const custom = enabled && !presets.includes(kbps);
   return (
     <label className="kv-inline">
       <span className="muted">{label}</span>
@@ -59,7 +66,7 @@ function SpeedSelect({
       >
         <option value="">{t("Unlimited")}</option>
         {custom && <option value={String(kbps)}>{kbps} KB/s</option>}
-        {SPEED_PRESETS.map((p) => (
+        {presets.map((p) => (
           <option key={p} value={p}>
             {p} KB/s
           </option>
@@ -95,6 +102,8 @@ export function Toolbar({
   onToggleAltSpeed,
   onSetSpeed,
   onLoadSession,
+  speedDownItems,
+  speedUpItems,
 }: Props) {
   const t = useT();
   const needSel = selectedCount === 0;
@@ -192,12 +201,14 @@ export function Toolbar({
                 label={t("Download")}
                 kbps={speedDown}
                 enabled={speedDownEnabled}
+                presets={speedDownItems}
                 onChange={(v) => onSetSpeed("down", v)}
               />
               <SpeedSelect
                 label={t("Upload")}
                 kbps={speedUp}
                 enabled={speedUpEnabled}
+                presets={speedUpItems}
                 onChange={(v) => onSetSpeed("up", v)}
               />
             </div>

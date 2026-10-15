@@ -4,6 +4,7 @@ import type { ConnForm, ServerBookmark } from "./types";
 import { normalizePathMap, type PathMapping } from "./paths";
 import { clampHistoryLimit, DIR_HISTORY_MAX } from "./dirHistory";
 import { clampConnectTimeout, clampHttpTimeout, CONNECT_TIMEOUT_DEFAULT, HTTP_TIMEOUT_DEFAULT } from "./netTimeouts";
+import { DEFAULT_SPEEDS } from "./speedPresets";
 import {
   clampPane,
   DEFAULT_DETAILS_HEIGHT,
@@ -255,6 +256,32 @@ export async function saveMinimizeToTray(on: boolean): Promise<void> {
   await store.save();
 }
 
+/**
+ * The speed-limit menu items, the original's "Speed limit menu items". It keeps
+ * one list per connection; this keeps one list for the client, since the
+ * connection profiles the original hangs them off do not exist here. The value
+ * is the raw comma-separated string, unparsed, so a half-typed list survives a
+ * restart.
+ */
+export async function loadSpeedItems(which: "down" | "up"): Promise<string> {
+  try {
+    const store = await getStore();
+    const key = which === "down" ? DOWN_SPEEDS_KEY : UP_SPEEDS_KEY;
+    return (await store.get<string>(key)) ?? DEFAULT_SPEEDS;
+  } catch {
+    return DEFAULT_SPEEDS;
+  }
+}
+
+export async function saveSpeedItems(which: "down" | "up", text: string): Promise<void> {
+  const store = await getStore();
+  await store.set(which === "down" ? DOWN_SPEEDS_KEY : UP_SPEEDS_KEY, text);
+  await store.save();
+}
+
+const DOWN_SPEEDS_KEY = "downSpeeds";
+const UP_SPEEDS_KEY = "upSpeeds";
+
 /** Which chrome regions are visible. */
 export interface ViewOptions {
   toolbar: boolean;
@@ -437,6 +464,58 @@ export async function loadDeleteTorrentFile(): Promise<boolean> {
 export async function saveDeleteTorrentFile(on: boolean): Promise<void> {
   const store = await getStore();
   await store.set(DELETE_TORRENT_FILE_KEY, on);
+  await store.save();
+}
+
+const PROMPT_ADD_OPTIONS_KEY = "promptAddOptions";
+
+/**
+ * Show the download-options stage of the Add dialog.
+ *
+ * The original's `Interface/ShowAddTorrentWindow`, on by default, and the only
+ * switch over that second stage: with it off the torrent goes in as it arrives,
+ * with every file wanted, and the dialog never asks. The first stage - picking a
+ * file, typing a link - is a separate thing in the original (a file picker and
+ * the little add-link box) and so it is here.
+ */
+export async function loadPromptAddOptions(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(PROMPT_ADD_OPTIONS_KEY)) ?? true;
+  } catch {
+    return true;
+  }
+}
+
+export async function savePromptAddOptions(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(PROMPT_ADD_OPTIONS_KEY, on);
+  await store.save();
+}
+
+const START_TORRENT_ON_ADD_KEY = "startTorrentOnAdd";
+
+/**
+ * Whether a torrent starts as soon as it is added.
+ *
+ * The original remembers the Add dialog's "Start torrent" box in
+ * `Interface/StartTorrentOnAdd` (on by default) and has no other way in. It
+ * matters beyond the dialog: a torrent that arrived from the watched folder
+ * never shows the dialog, so this remembered value is what decides whether it
+ * starts.
+ */
+export async function loadStartTorrentOnAdd(): Promise<boolean> {
+  try {
+    const store = await getStore();
+    return (await store.get<boolean>(START_TORRENT_ON_ADD_KEY)) ?? true;
+  } catch {
+    return true;
+  }
+}
+
+export async function saveStartTorrentOnAdd(on: boolean): Promise<void> {
+  const store = await getStore();
+  await store.set(START_TORRENT_ON_ADD_KEY, on);
   await store.save();
 }
 

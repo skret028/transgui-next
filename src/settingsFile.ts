@@ -16,6 +16,7 @@
  */
 import { normalizeColumns, type ColumnId } from "./columns";
 import { normalizePathMap, type PathMapping } from "./paths";
+import { DEFAULT_SPEEDS } from "./speedPresets";
 import type { ConnForm } from "./types";
 import type {
   HiddenRefresh,
@@ -56,6 +57,11 @@ export interface SafeSettings {
   autoReconnect: boolean;
   refreshSeconds: number;
   deleteTorrentFileAfterAdd: boolean;
+  promptAddOptions: boolean;
+  startTorrentOnAdd: boolean;
+  /** The speed-limit menu items, as typed (comma separated). */
+  downSpeeds: string;
+  upSpeeds: string;
   updateCheckDays: number;
 }
 
@@ -206,6 +212,10 @@ export function buildSettingsFile(
     autoReconnect: settings.autoReconnect ?? true,
     refreshSeconds: count(settings.refreshSeconds, 2, 1),
     deleteTorrentFileAfterAdd: !!settings.deleteTorrentFileAfterAdd,
+    promptAddOptions: settings.promptAddOptions ?? true,
+    startTorrentOnAdd: settings.startTorrentOnAdd ?? true,
+    downSpeeds: str(settings.downSpeeds) || DEFAULT_SPEEDS,
+    upSpeeds: str(settings.upSpeeds) || DEFAULT_SPEEDS,
     updateCheckDays: count(settings.updateCheckDays, 0, 0),
   };
 }
@@ -310,6 +320,10 @@ export function parseSettingsFile(text: string): ImportResult {
   settings.autoReconnect = bool(objData.autoReconnect, true);
   settings.refreshSeconds = count(objData.refreshSeconds, 2, 1);
   settings.deleteTorrentFileAfterAdd = bool(objData.deleteTorrentFileAfterAdd, false);
+  settings.promptAddOptions = bool(objData.promptAddOptions, true);
+  settings.startTorrentOnAdd = bool(objData.startTorrentOnAdd, true);
+  settings.downSpeeds = str(objData.downSpeeds) || DEFAULT_SPEEDS;
+  settings.upSpeeds = str(objData.upSpeeds) || DEFAULT_SPEEDS;
   settings.updateCheckDays = count(objData.updateCheckDays, 0, 0);
 
   // A file that carries a password was probably hand-edited; say so rather than

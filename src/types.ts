@@ -85,6 +85,10 @@ export interface TorrentDetail extends Torrent {
   files?: TorrentFile[];
   /** 1.0 once the metadata has arrived; below that for a fresh magnet. */
   metadataPercentComplete?: number;
+  /** When the metainfo was created - the original's "Created on". */
+  dateCreated?: number;
+  /** Bytes thrown away on pieces that failed their hash check. */
+  corruptEver?: number;
   fileStats?: FileStat[];
   peers?: Peer[];
   trackerStats?: TrackerStat[];

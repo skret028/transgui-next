@@ -33,7 +33,13 @@ export type Shortcut =
   /** Rename the selected torrent, as F2 does. */
   | { kind: "rename" }
   /** Move the selection's data to another location, as F6 does. */
-  | { kind: "move-data" };
+  | { kind: "move-data" }
+  /** Jump to the filter box. */
+  | { kind: "focus-search" }
+  /** Jump to a details page: the original's Alt+G/K/P/F. */
+  | { kind: "detail-tab"; tab: "info" | "files" | "peers" | "trackers" }
+  /** Jump to the n-th filter row, counting from the top: the original's Alt+1..8. */
+  | { kind: "filter-row"; row: number };
 
 export interface KeyLike {
   key: string;
@@ -83,6 +89,29 @@ export function resolveShortcut(e: KeyLike, ctx: ShortcutContext): Shortcut | nu
   }
 
   if (ctx.typing) return null;
+
+  // The Alt namespace, which the original hangs off the form itself: Alt+S jumps
+  // to the search box, Alt+G/K/P/F to the details pages (General, tracKers,
+  // Peers, Files - the original's own letters), and Alt+1..Alt+8 to the filter
+  // rows in order. It is left alone while a text field has focus, because on
+  // macOS Alt+letter is how accents and symbols are typed and claiming them
+  // would break every dialog in a non-English layout.
+  if (e.altKey && !mod && !e.shiftKey && e.code) {
+    switch (e.code) {
+      case "KeyS":
+        return { kind: "focus-search" };
+      case "KeyG":
+        return { kind: "detail-tab", tab: "info" };
+      case "KeyK":
+        return { kind: "detail-tab", tab: "trackers" };
+      case "KeyP":
+        return { kind: "detail-tab", tab: "peers" };
+      case "KeyF":
+        return { kind: "detail-tab", tab: "files" };
+    }
+    const row = /^Digit([1-8])$/.exec(e.code);
+    if (row) return { kind: "filter-row", row: Number(row[1]) - 1 };
+  }
 
   // Select all: outside a text field only, so the browser's own select-all
   // keeps working inside the filter box and dialog inputs.

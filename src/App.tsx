@@ -34,6 +34,7 @@ import {
   loadRefreshSeconds,
   loadServers,
   loadSmoothSpeeds,
+  loadSpeedItems,
   loadStatusBarFields,
   loadTrayAlwaysVisible,
   loadUiFontSize,
@@ -52,6 +53,7 @@ import {
   saveRefreshSeconds,
   saveServers,
   saveSmoothSpeeds,
+  saveSpeedItems,
   saveStatusBarFields,
   saveTrayAlwaysVisible,
   saveUiFontSize,
@@ -64,6 +66,10 @@ import {
   type ViewOptions,
   loadWatchSettings,
   saveWatchSettings,
+  loadPromptAddOptions,
+  savePromptAddOptions,
+  loadStartTorrentOnAdd,
+  saveStartTorrentOnAdd,
   loadFromNow,
   saveFromNow,
   loadHistoryLimit,
@@ -115,9 +121,10 @@ import {
   useT,
 } from "./i18n";
 import { ConnectionBar } from "./components/ConnectionBar";
-import { SPEED_PRESETS, Toolbar } from "./components/Toolbar";
+import { Toolbar } from "./components/Toolbar";
+import { DEFAULT_SPEEDS, speedMenuItems } from "./speedPresets";
 import { TorrentTable } from "./components/TorrentTable";
-import { DetailsPanel } from "./components/DetailsPanel";
+import { DetailsPanel, type Tab as DetailsTab } from "./components/DetailsPanel";
 import { pushDirHistory, DIR_HISTORY_MAX } from "./dirHistory";
 import { HTTP_TIMEOUT_DEFAULT, CONNECT_TIMEOUT_DEFAULT } from "./netTimeouts";
 import { filePatchAll } from "./filePriority";
@@ -182,6 +189,10 @@ function AppInner() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterText, setFilterText] = useState("");
+  /** Which details page is showing, so Alt+G/K/P/F can jump to one. */
+  const [detailsTab, setDetailsTab] = useState<DetailsTab>("info");
+  /** The filter box, for the original's Alt+S. */
+  const filterBox = useRef<HTMLInputElement>(null);
   const [filterSel, setFilterSel] = useState<FilterSelection>(ALL_SELECTION);
 
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -198,6 +209,13 @@ function AppInner() {
   const [refreshSeconds, setRefreshSeconds] = useState(2);
   /** Delete the local `.torrent` once the daemon has accepted it. */
   const [deleteTorrentFile, setDeleteTorrentFile] = useState(false);
+  /** The original's "prompt for download options", on unless turned off. */
+  const [promptAddOptions, setPromptAddOptions] = useState(true);
+  /** Remembered "start torrent" answer, which a watched add also follows. */
+  const [startTorrentOnAdd, setStartTorrentOnAdd] = useState(true);
+  /** The speed-limit menu items, as typed, one list per direction. */
+  const [downSpeeds, setDownSpeeds] = useState(DEFAULT_SPEEDS);
+  const [upSpeeds, setUpSpeeds] = useState(DEFAULT_SPEEDS);
   /** Days between version checks; 0 leaves the check to the button. */
   const [updateCheckDays, setUpdateCheckDays] = useState(0);
   /** Who the system opens magnet links and .torrent files with. */
@@ -233,8 +251,9 @@ function AppInner() {
     connectTimeout: CONNECT_TIMEOUT_DEFAULT,
   });
   const [addSize, setAddSize] = useState<Partial<AddDialogSize>>({});
-  const [watchOffer, setWatchOffer] = useState<string | null>(null);
   const watchWaiting = useRef<string[]>([]);
+  /** Guard so one watched add at a time, as the original's FAddingTorrent does. */
+  const addingWatch = useRef(false);
 
   /**
    * The two pane sizes. The original remembers both splitter positions; the way
@@ -331,6 +350,58 @@ function AppInner() {
     (path: string) => revealPathFor(path, form.host, pathMap),
     [form.host, pathMap],
   );
+
+  /**
+   * Show the selection's download folders. The original's "Open containing
+   * folder" acts on the focused row; here the whole selection goes, capped so a
+   * select-all cannot open one window per torrent.
+   */
+  const revealSelection = useCallback(async () => {
+    const dirs = new Set<string>();
+    for (const x of torrents) {
+      if (!selection.has(x.id)) continue;
+      const local = mapLocalPath(x.downloadDir ?? "");
+      if (local) dirs.add(local);
+    }
+    if (dirs.size === 0) {
+      setNotice(t("Set a path mapping to open the daemon's folders from this machine"));
+      return;
+    }
+    for (const dir of [...dirs].slice(0, 5)) {
+      try {
+        await rpc.revealPath(dir);
+      } catch (e) {
+        setError(String(e));
+      }
+    }
+  }, [mapLocalPath, selection, t, torrents]);
+
+  /**
+   * Open the selection's own data: the file itself for a single-file torrent,
+   * and the folder it lives in otherwise - which is what the original's "Open"
+   * resolves to once it has looked the file list up. The list rows do not carry
+   * the file list, so the torrent's download folder plus its name is used; that
+   * is the same path in both cases.
+   */
+  const openSelection = useCallback(async () => {
+    for (const x of torrents) {
+      if (!selection.has(x.id)) continue;
+      let dir = x.downloadDir ?? "";
+      while (dir.endsWith("/")) dir = dir.slice(0, -1);
+      const local = mapLocalPath(dir && x.name ? `${dir}/${x.name}` : dir);
+      if (!local) {
+        setNotice(t("Set a path mapping to open the daemon's folders from this machine"));
+        return;
+      }
+      try {
+        await rpc.openPath(local);
+      } catch (e) {
+        setError(String(e));
+      }
+      // The original acts on the one torrent that is current.
+      return;
+    }
+  }, [mapLocalPath, selection, t, torrents]);
 
   /**
    * Sizes for the status bar's sizes line: over the selection, or over what is
@@ -482,6 +553,10 @@ function AppInner() {
       setHiddenRefresh(savedHiddenRefresh);
       setRefreshSeconds(savedRefreshSeconds);
       setDeleteTorrentFile(savedDeleteTorrentFile);
+      setPromptAddOptions(await loadPromptAddOptions());
+      setStartTorrentOnAdd(await loadStartTorrentOnAdd());
+      setDownSpeeds(await loadSpeedItems("down"));
+      setUpSpeeds(await loadSpeedItems("up"));
       setUpdateCheckDays(savedUpdateCheck.days);
       // Not a stored preference: the system's own answer, read at startup so a
       // change made in Finder is shown as it is.
@@ -673,6 +748,19 @@ function AppInner() {
         );
         if (!ok) return;
       }
+      // Verifying re-reads every piece from disk, which on a large torrent takes
+      // a long time and stops it seeding while it runs. The original confirms
+      // first and answers "no" by default, and so does this.
+      if (act === "verify") {
+        const name = torrents.find((x) => x.id === ids[0])?.name ?? "";
+        const ok = await ask(
+          ids.length === 1
+            ? t("Torrent verification may take a long time.~Are you sure to start verification of torrent '%s'?", { 1: name })
+            : t("Torrents verification may take a long time.~Are you sure to start verification of %d torrents?", { 1: ids.length }),
+          { title: t("Verify"), kind: "warning" },
+        );
+        if (!ok) return;
+      }
       try {
         await rpc.action(act, ids);
         await refresh();
@@ -681,7 +769,7 @@ function AppInner() {
         setError(String(e));
       }
     },
-    [selection, refresh, refreshDetail, t],
+    [selection, torrents, refresh, refreshDetail, t],
   );
 
   /**
@@ -712,11 +800,16 @@ function AppInner() {
   }, []);
 
   const menuItems: MenuItem[] = [
+    // The original's own pmTorrents order: the two filesystem entries first,
+    // then the state changes, then the per-torrent settings.
+    { id: "open_file", labelKey: "Open" },
+    { id: "open_folder", labelKey: "Open containing folder" },
+    { id: null, labelKey: "" },
     { id: "start", labelKey: "Start" },
+    { id: "force_start", labelKey: "Force start" },
     { id: "stop", labelKey: "Stop" },
-    { id: "verify", labelKey: "Verify" },
-    { id: "reannounce", labelKey: "Reannounce" },
-    { id: "move_location", labelKey: "Set data location…" },
+    { id: "remove", labelKey: "Remove" },
+    { id: "remove_with_data", labelKey: "Remove and delete data", danger: true },
     { id: null, labelKey: "" },
     {
       id: "priority",
@@ -737,17 +830,18 @@ function AppInner() {
         { id: "queue_bottom", labelKey: "Move bottom" },
       ],
     },
-    { id: null, labelKey: "" },
+    { id: "reannounce", labelKey: "Reannounce" },
+    { id: "verify", labelKey: "Verify" },
     { id: "copy_magnet", labelKey: "Copy Magnet Link(s)" },
     { id: "copy_hash", labelKey: "Copy" },
-    { id: null, labelKey: "" },
+    { id: "move_location", labelKey: "Set data location…" },
     { id: "labels", labelKey: "Labels" },
     { id: "rename", labelKey: "Rename" },
+    { id: null, labelKey: "" },
     { id: "props", labelKey: "Properties" },
     { id: "trackers", labelKey: "Modify trackers…" },
     { id: null, labelKey: "" },
-    { id: "remove", labelKey: "Remove" },
-    { id: "remove_with_data", labelKey: "Remove and delete data", danger: true },
+    { id: "columns", labelKey: "Setup columns" },
   ];
 
   const pickRowMenu = useCallback(
@@ -784,9 +878,27 @@ function AppInner() {
         setMoveOpen(true);
         return;
       }
+      // The two filesystem entries from the original's row menu, and the
+      // columns dialog that sits at its end.
+      if (act === "open_folder") {
+        await revealSelection();
+        return;
+      }
+      if (act === "open_file") {
+        await openSelection();
+        return;
+      }
+      if (act === "force_start") {
+        await action("start_now");
+        return;
+      }
+      if (act === "columns") {
+        setShowColumns(true);
+        return;
+      }
       await action(act);
     },
-    [selection, torrents, action, copyMagnet, refresh, setPriority, t],
+    [selection, torrents, action, copyMagnet, refresh, setPriority, revealSelection, openSelection, t],
   );
 
   /** Actions that apply to every torrent and need no selection. */
@@ -910,10 +1022,12 @@ function AppInner() {
    * repeat add still goes through the same announcement as any other add.
    */
   const prepareAdd = useCallback(
-    async (options: AddTorrentOptions): Promise<PreparedAdd | null> => {
+    async (options: AddTorrentOptions, rememberDirectory = true): Promise<PreparedAdd | null> => {
       try {
         const res = await rpc.add({ ...options, paused: true });
-        if (options.download_dir) rememberDir(options.download_dir);
+        // A watched add is not a directory the user picked, so the original
+        // keeps it out of the recent-directories history.
+        if (rememberDirectory && options.download_dir) rememberDir(options.download_dir);
         const duplicate = duplicateIdOf(res);
         if (duplicate != null) {
           setShowAdd(false);
@@ -969,11 +1083,12 @@ function AppInner() {
         setSelection(new Set([prepared.id]));
         setShowAdd(false);
         setPrefillSource("");
-        // The original's client-side option, for adds that came from a file.
-        // The daemon never sees that file, so its own trash-original setting
-        // cannot do this. A failure here is not worth an error: the torrent is
-        // in, and the file simply stays.
-        if (deleteTorrentFile && prepared.localPath) {
+        // The client-side option, for adds that came from a file. The daemon
+        // never sees that file, so its own trash-original setting cannot do
+        // this. A failure here is not worth an error: the torrent is in, and
+        // the file simply stays. A watched file is deleted either way - that is
+        // what stops the folder offering it again on the next look.
+        if ((choices.deleteLocalFile || deleteTorrentFile) && prepared.localPath) {
           try {
             await rpc.removeFile(prepared.localPath);
           } catch (e) {
@@ -1172,6 +1287,26 @@ function AppInner() {
     void saveDeleteTorrentFile(on);
   }, []);
 
+  const changePromptAddOptions = useCallback((on: boolean) => {
+    setPromptAddOptions(on);
+    void savePromptAddOptions(on);
+  }, []);
+
+  const changeStartTorrentOnAdd = useCallback((on: boolean) => {
+    setStartTorrentOnAdd(on);
+    void saveStartTorrentOnAdd(on);
+  }, []);
+
+  const changeDownSpeeds = useCallback((text: string) => {
+    setDownSpeeds(text);
+    void saveSpeedItems("down", text);
+  }, []);
+
+  const changeUpSpeeds = useCallback((text: string) => {
+    setUpSpeeds(text);
+    void saveSpeedItems("up", text);
+  }, []);
+
   const changeUpdateCheckDays = useCallback((days: number) => {
     setUpdateCheckDays(days);
     void saveUpdateCheck(days, updateCheckLast.current);
@@ -1256,27 +1391,63 @@ function AppInner() {
       savePanes,
     );
 
-  /** Offer the next watched file, if there is one and the dialog is free. */
-  const offerNextWatch = useCallback(() => {
-    if (showAddRef.current) return;
-    const step = take(watchWaiting.current);
-    watchWaiting.current = step.waiting;
-    if (!step.path) return;
-    setWatchOffer(step.path);
-    setPrefillSource(step.path);
-    setShowAdd(true);
-  }, []);
+  /**
+   * Add the next file the watched folder turned up.
+   *
+   * The original's `IsWatchTorrent` never shows the download-options stage: the
+   * torrent goes in as it is, with every file wanted and the watch destination
+   * as its download directory. It is deleted afterwards whatever "delete the
+   * .torrent after a successful addition" says - that is what settles a watched
+   * folder rather than offering the same file again on the next look - and the
+   * destination does not join the recent download directories, because nobody
+   * chose it. Everything waiting is taken in one pass, as the original's
+   * `while FPendingTorrents.Count > 0` loop does.
+   */
+  const addNextWatch = useCallback(async () => {
+    if (addingWatch.current) return;
+    addingWatch.current = true;
+    try {
+      for (;;) {
+        const step = take(watchWaiting.current);
+        watchWaiting.current = step.waiting;
+        if (!step.path) return;
+        const prepared = await prepareAdd(
+          {
+            filename: null,
+            local_torrent_path: step.path,
+            download_dir: watch.destination.trim() || null,
+            labels: [],
+            paused: true,
+          },
+          // Not a directory the user picked, so it is not remembered.
+          false,
+        );
+        // A repeat add has already explained itself; move on to the next file.
+        if (!prepared) continue;
+        await applyPreparedAdd(prepared, {
+          name: "",
+          peerLimit: prepared.peerLimit,
+          wanted: [],
+          unwanted: [],
+          start: startTorrentOnAdd,
+          deleteLocalFile: true,
+        });
+      }
+    } finally {
+      addingWatch.current = false;
+    }
+  }, [prepareAdd, applyPreparedAdd, watch.destination, startTorrentOnAdd]);
 
   /**
-   * Look in the watched folder and queue what is there.
+   * Look in the watched folder and take what is there.
    *
-   * Same rules as the original's timer: it only looks while nothing else is
-   * pending, and a file that is still in the folder gets offered again on the
-   * next scan - which is what makes "delete the .torrent after a successful
-   * addition" the thing that settles a watch folder down.
+   * The original's timer passes over the look while an add is already running,
+   * and its scan only picks up files when nothing is pending. Here the waiting
+   * list is de-duplicated instead, so a file that is still in the folder is
+   * simply already known about.
    */
   const watchTick = useCallback(async () => {
-    if (!watch.folder || showAddRef.current) return;
+    if (!watch.folder || addingWatch.current || showAddRef.current) return;
     try {
       const scan = await rpc.watchScan(watch.folder);
       if (!scan.exists || !scan.writable) return;
@@ -1284,8 +1455,8 @@ function AppInner() {
     } catch {
       /* a folder that cannot be read is not worth a banner every interval */
     }
-    offerNextWatch();
-  }, [watch.folder, offerNextWatch]);
+    await addNextWatch();
+  }, [watch.folder, addNextWatch]);
 
   useEffect(() => {
     if (!watch.folder) return;
@@ -1294,10 +1465,9 @@ function AppInner() {
     return () => window.clearInterval(id);
   }, [watch.folder, watch.intervalMinutes, watchTick]);
 
-  // A dialog closing lets the next watched file take its turn.
-  useEffect(() => {
-    if (!showAdd) offerNextWatch();
-  }, [showAdd, offerNextWatch]);
+  // The watched folder takes its own files without a dialog, so there is no
+  // "dialog closing" cue to wait for: the tick above adds them straight away and
+  // keeps going until the waiting list is empty.
 
   /**
    * The three settings the connect and add paths read, kept in refs so those
@@ -1372,31 +1542,6 @@ function AppInner() {
     setViewOptions(value);
     void saveViewOptions(value);
   }, []);
-
-  /**
-   * Show the selection's download folders. The original's "Open containing
-   * folder" acts on the focused row; here the whole selection goes, capped so a
-   * select-all cannot open one window per torrent.
-   */
-  const revealSelection = useCallback(async () => {
-    const dirs = new Set<string>();
-    for (const x of torrents) {
-      if (!selection.has(x.id)) continue;
-      const local = mapLocalPath(x.downloadDir ?? "");
-      if (local) dirs.add(local);
-    }
-    if (dirs.size === 0) {
-      setNotice(t("Set a path mapping to open the daemon's folders from this machine"));
-      return;
-    }
-    for (const dir of [...dirs].slice(0, 5)) {
-      try {
-        await rpc.revealPath(dir);
-      } catch (e) {
-        setError(String(e));
-      }
-    }
-  }, [mapLocalPath, selection, t, torrents]);
 
   /**
    * The original's "Don't download" for a torrent: every file in it is marked
@@ -1477,6 +1622,21 @@ function AppInner() {
         case "move-data":
           setMoveOpen(true);
           break;
+        case "focus-search":
+          filterBox.current?.focus();
+          filterBox.current?.select();
+          break;
+        case "detail-tab":
+          // The page only exists while a torrent's details are up, which is the
+          // same thing the original's Alt+G/K/P/F need.
+          if (detailIdRef.current != null) setDetailsTab(hit.tab);
+          break;
+        case "filter-row": {
+          const row = STATUS_FILTERS[hit.row];
+          if (!row) break;
+          setFilterSel(row.id === "all" ? ALL_SELECTION : { kind: "status", value: row.id });
+          break;
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -1589,6 +1749,10 @@ function AppInner() {
       autoReconnect,
       refreshSeconds,
       deleteTorrentFileAfterAdd: deleteTorrentFile,
+      promptAddOptions,
+      startTorrentOnAdd,
+      downSpeeds,
+      upSpeeds,
       updateCheckDays,
     });
     const target = await save({
@@ -1691,6 +1855,10 @@ function AppInner() {
     if (s.refreshSeconds !== undefined) changeRefreshSeconds(s.refreshSeconds);
     if (s.deleteTorrentFileAfterAdd !== undefined)
       changeDeleteTorrentFile(s.deleteTorrentFileAfterAdd);
+    if (s.promptAddOptions !== undefined) changePromptAddOptions(s.promptAddOptions);
+    if (s.startTorrentOnAdd !== undefined) changeStartTorrentOnAdd(s.startTorrentOnAdd);
+    if (s.downSpeeds !== undefined) changeDownSpeeds(s.downSpeeds);
+    if (s.upSpeeds !== undefined) changeUpSpeeds(s.upSpeeds);
     if (s.updateCheckDays !== undefined) changeUpdateCheckDays(s.updateCheckDays);
     if (s.minimizeToTray !== undefined) changeMinimizeToTray(s.minimizeToTray);
     if (s.viewOptions !== undefined) changeViewOptions(s.viewOptions);
@@ -1866,13 +2034,12 @@ function AppInner() {
   const trayUpEnabled = !!session?.["speed-limit-up-enabled"];
   const trayUpKbps = Number(session?.["speed-limit-up"] ?? 0);
   const traySpeeds = useMemo(() => {
-    const speeds = [...SPEED_PRESETS];
-    // The original lists whatever limit is in force even when it is not one of
-    // the presets, so a custom speed still gets a check mark of its own.
-    if (trayDownEnabled && trayDownKbps > 0) speeds.push(trayDownKbps);
-    if (trayUpEnabled && trayUpKbps > 0) speeds.push(trayUpKbps);
-    return Array.from(new Set(speeds)).sort((a, b) => a - b);
-  }, [trayDownEnabled, trayDownKbps, trayUpEnabled, trayUpKbps]);
+    // The same menu the toolbar's drop-downs show, with whatever limit is in
+    // force folded in, so a custom speed still gets a check mark of its own.
+    const down = speedMenuItems(downSpeeds, trayDownEnabled ? trayDownKbps : null);
+    const up = speedMenuItems(upSpeeds, trayUpEnabled ? trayUpKbps : null);
+    return Array.from(new Set([...down, ...up])).sort((a, b) => a - b);
+  }, [downSpeeds, upSpeeds, trayDownEnabled, trayDownKbps, trayUpEnabled, trayUpKbps]);
 
   useEffect(() => {
     void rpc
@@ -2024,8 +2191,13 @@ function AppInner() {
         </select>
         <input
           className="filter"
+          ref={filterBox}
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
+          onKeyDown={(e) => {
+            // The original clears the filter box on Escape.
+            if (e.key === "Escape") setFilterText("");
+          }}
           placeholder={t("Filter name / label / hash")}
           disabled={!connected}
         />
@@ -2117,6 +2289,14 @@ function AppInner() {
           onToggleAltSpeed={toggleAltSpeed}
           onSetSpeed={setSpeedLimit}
           onLoadSession={loadSessionInfo}
+          speedDownItems={speedMenuItems(
+            downSpeeds,
+            session?.["speed-limit-down-enabled"] ? Number(session?.["speed-limit-down"] ?? 0) : null,
+          )}
+          speedUpItems={speedMenuItems(
+            upSpeeds,
+            session?.["speed-limit-up-enabled"] ? Number(session?.["speed-limit-up"] ?? 0) : null,
+          )}
         />
       )}
 
@@ -2168,6 +2348,8 @@ function AppInner() {
                 setDetail(null);
               }}
               onRefresh={refreshDetail}
+              tab={detailsTab}
+              onTabChange={setDetailsTab}
             />
             </>
           )}
@@ -2207,13 +2389,14 @@ function AppInner() {
       {showAdd && (
         <AddTorrentDialog
           initialSource={prefillSource}
-          initialDownloadDir={watchOffer ? watch.destination : ""}
+          promptOptions={promptAddOptions}
+          startOnAdd={startTorrentOnAdd}
+          onStartOnAddChange={changeStartTorrentOnAdd}
           size={addSize.width && addSize.height ? { width: addSize.width, height: addSize.height } : undefined}
           onSizeChange={rememberAddSize}
           onClose={() => {
             setShowAdd(false);
             setPrefillSource("");
-            setWatchOffer(null);
           }}
           onPrepare={prepareAdd}
           onApply={applyPreparedAdd}
@@ -2285,6 +2468,12 @@ function AppInner() {
           onRefreshSecondsChange={changeRefreshSeconds}
           deleteTorrentFile={deleteTorrentFile}
           onDeleteTorrentFileChange={changeDeleteTorrentFile}
+          promptAddOptions={promptAddOptions}
+          onPromptAddOptionsChange={changePromptAddOptions}
+          downSpeeds={downSpeeds}
+          upSpeeds={upSpeeds}
+          onDownSpeedsChange={changeDownSpeeds}
+          onUpSpeedsChange={changeUpSpeeds}
           updateCheckDays={updateCheckDays}
           onUpdateCheckDaysChange={changeUpdateCheckDays}
           handler={handler}

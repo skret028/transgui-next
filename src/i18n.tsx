@@ -14,6 +14,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { formatMessage } from "./msgFormat";
 
 export type Dict = Record<string, string>;
 
@@ -82,13 +83,7 @@ async function ensureLocale(locale: string): Promise<boolean> {
 
 export function translate(locale: string, key: string, vars?: Record<string, string | number>): string {
   const dict = DICTS[locale];
-  let out = (dict && dict[key]) || key;
-  if (vars) {
-    for (const [k, v] of Object.entries(vars)) {
-      out = out.split(`{${k}}`).join(String(v));
-    }
-  }
-  return out;
+  return formatMessage((dict && dict[key]) || key, vars);
 }
 
 interface Ctx {

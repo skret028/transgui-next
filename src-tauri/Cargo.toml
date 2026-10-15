@@ -31,6 +31,9 @@ tauri-plugin-clipboard-manager = "2"
 # system's handler for it.
 tauri-plugin-window-state = "2"
 tauri-plugin-deep-link = "2"
+# One instance at a time, as the original has: a second launch hands its
+# command line to the first and exits.
+tauri-plugin-single-instance = "2"
 # getnameinfo/PTR reverse lookups for peer addresses (explicitly triggered).
 dns-lookup = "4"
 serde = { version = "1", features = ["derive"] }

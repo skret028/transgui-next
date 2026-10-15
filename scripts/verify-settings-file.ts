@@ -66,13 +66,21 @@ const settings = {
   notifyOnComplete: false,
   pathMap: [{ remote: "/downloads", local: "/Volumes/media" }],
   uiFontSize: "large",
-  statusBarFields: { total: true, shown: false, selected: true, updated: false, hint: true, doubleClick: false },
+  statusBarFields: { total: true, shown: false, selected: true, updated: false, hint: true, doubleClick: false, sizes: true },
   hiddenRefresh: { enabled: true, seconds: 42 },
   minimizeToTray: false,
   viewOptions: { toolbar: false, filterPane: true, details: false, statusBar: true, bigToolbar: true },
   clipboardAutoAdd: true,
   smoothSpeeds: true,
   trayAlwaysVisible: false,
+  autoReconnect: false,
+  refreshSeconds: 7,
+  deleteTorrentFileAfterAdd: true,
+  promptAddOptions: false,
+  startTorrentOnAdd: false,
+  downSpeeds: "10,20,30",
+  upSpeeds: "5,15",
+  updateCheckDays: 3,
 };
 
 // (1) the store really does hold a password — the point is that the export
@@ -111,22 +119,38 @@ if (back.ok) {
   eq(s.notifyOnComplete, false, "notifyOnComplete still round-trips");
   eq(s.pathMap, settings.pathMap, "pathMap still round-trips");
   eq(s.locale, "zh-CN", "locale still round-trips");
+  eq(s.autoReconnect, false, "autoReconnect round-trips");
+  eq(s.refreshSeconds, 7, "refreshSeconds round-trips");
+  eq(s.deleteTorrentFileAfterAdd, true, "deleteTorrentFileAfterAdd round-trips");
+  eq(s.promptAddOptions, false, "promptAddOptions round-trips");
+  eq(s.startTorrentOnAdd, false, "startTorrentOnAdd round-trips");
+  eq(s.downSpeeds, "10,20,30", "downSpeeds round-trips");
+  eq(s.upSpeeds, "5,15", "upSpeeds round-trips");
+  eq(s.updateCheckDays, 3, "updateCheckDays round-trips");
   eq(
     Object.keys(back.settings).sort(),
     [
+      "autoReconnect",
       "clipboardAutoAdd",
       "columns",
+      "deleteTorrentFileAfterAdd",
+      "downSpeeds",
       "form",
       "hiddenRefresh",
       "locale",
       "minimizeToTray",
       "notifyOnComplete",
       "pathMap",
+      "promptAddOptions",
+      "refreshSeconds",
       "servers",
       "smoothSpeeds",
+      "startTorrentOnAdd",
       "statusBarFields",
       "trayAlwaysVisible",
       "uiFontSize",
+      "upSpeeds",
+      "updateCheckDays",
       "viewOptions",
     ],
     "round-trip exposes exactly the expected keys",
