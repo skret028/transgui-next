@@ -1458,12 +1458,29 @@ function AppInner() {
     await addNextWatch();
   }, [watch.folder, addNextWatch]);
 
+  /**
+   * The tick, held in a ref so the timer below stays armed.
+   *
+   * A `setInterval` is torn down and set up again whenever its dependencies
+   * change, and this one used to depend on the tick itself - which changes
+   * whenever anything it calls changes, and one of those (`announceDuplicate`)
+   * depends on the torrent list, so it changed on every two-second poll. The
+   * timer was therefore re-armed every two seconds and a one-minute interval
+   * never came round: the watched folder sat there and did nothing at all. A
+   * ref keeps the timer keyed to the two things that should restart it - which
+   * folder, and how often.
+   */
+  const watchTickRef = useRef(watchTick);
+  useEffect(() => {
+    watchTickRef.current = watchTick;
+  }, [watchTick]);
+
   useEffect(() => {
     if (!watch.folder) return;
     const ms = Math.max(1, watch.intervalMinutes) * 60_000;
-    const id = window.setInterval(() => void watchTick(), ms);
+    const id = window.setInterval(() => void watchTickRef.current(), ms);
     return () => window.clearInterval(id);
-  }, [watch.folder, watch.intervalMinutes, watchTick]);
+  }, [watch.folder, watch.intervalMinutes]);
 
   // The watched folder takes its own files without a dialog, so there is no
   // "dialog closing" cue to wait for: the tick above adds them straight away and
@@ -1524,8 +1541,11 @@ function AppInner() {
           if (!scan.exists) setNotice(t("That folder is not there."));
           else if (!scan.writable) setNotice(t("That folder cannot be written to."));
         })
-        .catch(() => {
-          /* the scan itself failed to run; the timer will try again */
+        .catch((e) => {
+          // A scan that cannot even be run is worth saying out loud: without
+          // this the folder simply never does anything and there is nothing on
+          // screen to say why.
+          setNotice(String(e));
         });
     },
     [t],
@@ -1623,8 +1643,17 @@ function AppInner() {
           setMoveOpen(true);
           break;
         case "focus-search":
-          filterBox.current?.focus();
-          filterBox.current?.select();
+          // Deferred, and by more than a turn: moving focus inside the keydown
+          // handler hands the same keystroke to the box that was just focused,
+          // and on macOS Alt+S types ß, so the box came up with a stray
+          // character already in it. Cancelling the event is not enough - the
+          // character is inserted by the text system, in its own task after the
+          // keydown, and a 0 ms timer can still run before that. Long enough to
+          // be after it is short enough to feel immediate.
+          window.setTimeout(() => {
+            filterBox.current?.focus();
+            filterBox.current?.select();
+          }, 60);
           break;
         case "detail-tab":
           // The page only exists while a torrent's details are up, which is the

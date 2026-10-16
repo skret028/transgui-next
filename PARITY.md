@@ -130,6 +130,30 @@ Two things this round taught, both about the message files:
 - transgui writes a **line break inside a message as `~`**, in its English source and in every translation, and its placeholders are **printf's `%s`/`%d`**, not named ones. Since the locale files here are its own translations carried over as they stand, the lookup has to honour both — that is what lets a two-line question and a message with two arguments be taken from the original instead of being reworded here and losing all 28 translations. `src/msgFormat.ts` does that, on its own so it can be tested without a browser.
 - A `useCallback` **lists its dependencies when the component body runs**, so naming a function defined further down the file throws then and there ("used before declaration"), even though the callback body would never have run yet. The two filesystem actions the row menu needed had to be moved above it.
 
+Two the click-level checks turned up, both of which had been invisible from the
+code alone:
+
+- **A timer whose dependencies change on every poll never fires.** The watch
+  interval depended on the tick, which depended on `addNextWatch`, which depended
+  on `prepareAdd`, which depends on `announceDuplicate` - which reads the torrent
+  list, so it is a new function on every two-second poll. The effect was therefore
+  torn down and set up again every two seconds, and a one-minute `setInterval`
+  never came round: the watched folder sat there and did nothing, with no error
+  anywhere, because nothing had failed. The tick is now held in a ref and the
+  timer depends only on the folder and the interval. Any timer keyed to a
+  callback that reads polled state has this shape - check the whole chain, not
+  just the first hop.
+- **Alt+S typed ß into the box it had just focused.** Alt+letter is how macOS
+  types accents and symbols, and moving focus inside the `keydown` handler hands
+  the keystroke to the newly focused field - cancelling the event is not enough,
+  because the character is inserted by the text system once it has somewhere to
+  put it. Focusing on the next turn leaves it nowhere to go. The other Alt
+  bindings move no focus, so they were never affected.
+
+One stale description went with them: the watched-folder note in the settings
+dialog still said what it finds opens the Add dialog, which stopped being true
+when the folder stopped doing that.
+
 ## Deliberate differences
 
 - **A repeat add always opens a dialog, but only asks about trackers when there

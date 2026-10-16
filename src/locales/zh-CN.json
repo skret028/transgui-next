@@ -665,7 +665,7 @@
   "Look in it every": "查看间隔",
   "Put what it finds in": "找到的存入目录",
   "(both blank = the server's own default)": "（都留空 = 用服务器的默认目录）",
-  "What is found opens the Add dialog like any other torrent. The folder has to exist and be writable, and a file that is still in it is offered again on the next look - which is what \"delete the .torrent after a successful addition\" settles.": "找到的种子会像普通种子一样打开添加对话框。目录必须存在且可写；没被处理的文件下次查看会再次提示——开启「添加成功后删除 .torrent 文件」才能真正安静下来。",
+  "What is found goes in as it is - no dialog, every file wanted, and the .torrent is deleted afterwards whether or not the box above is ticked, which is what settles the folder. The destination does not join the recent download directories: nobody chose it.": "找到的种子直接入列：不弹对话框、全部文件都下载；无论上面那个勾选框是否勾上，成功添加后都会删掉 .torrent 文件——这才是让目录安静下来的做法。目标目录不会记进最近下载目录，因为没人选过它。",
   "Select the folder to watch": "选择要监视的目录",
   "Select a download folder": "选择下载目录",
   "That folder is not there.": "这个目录不存在。",

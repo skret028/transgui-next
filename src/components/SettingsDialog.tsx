@@ -1211,7 +1211,7 @@ export function SettingsDialog({
           </div>
 
           <p className="muted">
-            {t("What is found opens the Add dialog like any other torrent. The folder has to exist and be writable, and a file that is still in it is offered again on the next look - which is what \"delete the .torrent after a successful addition\" settles.")}
+            {t("What is found goes in as it is - no dialog, every file wanted, and the .torrent is deleted afterwards whether or not the box above is ticked, which is what settles the folder. The destination does not join the recent download directories: nobody chose it.")}
           </p>
 
           <label className="chk">
