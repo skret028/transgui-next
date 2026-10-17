@@ -185,6 +185,16 @@ when the folder stopped doing that.
   names everywhere - the files list, the Add dialog's "Save as" - so there is
   one way to rename something rather than two. What the key does is unchanged:
   renames whatever is selected.
+- **Confirmations are asked in the app's own dialog, not a system alert.** The
+  wording, the Yes/No pair and the "no" default are all the original's; only the
+  box it is asked in differs. The system alert had two problems. Its default
+  button was Yes, so unlike the original's `mbNo` a stray Return would have
+  started a verification that reads every piece back off the disk. And it could
+  not be reached by the accessibility tools this app is checked with: the check
+  that a confirmation is asked before verifying could not tell an unanswerable
+  question from no question at all. The informational pop-up when a repeat add
+  has no trackers to merge is still the system's, as it is in the original, since
+  nothing is being decided there.
 
 ## Not implemented
 
@@ -325,6 +335,30 @@ Two bugs the closed-loop checks turned up on the way, both fixed:
   lone "1" into "10", the "2" then lands on the end of it, and the field settles
   on 99. The three number fields now hold what is being typed and check the
   range when the field is left, which is what the original's spin edits do.
+- The main window's **shortcuts stayed live behind an open dialog**. Escape and
+  the focused button did what they should, but Delete at a confirmation would
+  have removed a torrent from under the question, and Alt+X would have taken the
+  selection out of the list being asked about. The original's dialogs are modal
+  in that sense; now so is this - while a dialog is up the list's shortcuts are
+  not in play.
+- **Delete fired twice over.** The window's own Delete removes the selected
+  torrent, and the tracker table's Delete removes the tracker. The table's
+  handler runs first and stops the event, but the window's listener is separate
+  and did not look at that, so Delete aimed at a tracker would also have removed
+  the selected torrent. The window handler now ignores a key something inside
+  the window has already taken.
+- **Delete on a tracker row is written but could not be shown to work.** The row
+  is focusable and handles Delete and Backspace, and it now takes the focus when
+  it is clicked (a click on a cell leaves the keyboard on the document). On
+  screen, a click on the row followed by Delete, Backspace or forward-Delete
+  produced no question in any arrangement tried, and the panel's Remove button
+  could not be located reliably enough to drive either - so the tracker's own
+  confirmation is checked only as far as its code path goes, not on screen. The
+  first attempts clicked an element in the wrong pane entirely, which is part of
+  why this took as long as it did; re-checking on a real machine is the next step.
+  The forward-Delete key is what triggers the *window's* Delete, matching the
+  original: on macOS the key next to the arrows reports itself as Backspace, and
+  only forward-Delete is `Delete` in both programs.
 
 ## Ahead of the original
 

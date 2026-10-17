@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
 import type { TorrentDetail } from "../types";
 import { useT } from "../i18n";
 import { rpc } from "../api";
@@ -16,6 +15,7 @@ import {
 } from "../format";
 import { PromptDialog } from "./PromptDialog";
 import { MoveLocationDialog } from "./MoveLocationDialog";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface Props {
   detail: TorrentDetail | null;
@@ -114,6 +114,11 @@ export function DetailsPanel({
   const [renaming, setRenaming] = useState<{ path: string; initial: string } | null>(null);
   const [trackerAdd, setTrackerAdd] = useState(false);
   const [trackerEdit, setTrackerEdit] = useState<{ id: number; url: string } | null>(null);
+  // The tracker whose removal is being confirmed, with the waiting answer.
+  const [trackerRemoveAsk, setTrackerRemoveAsk] = useState<{
+    announce: string;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
   const [moving, setMoving] = useState(false);
   /** Reverse-DNS results, keyed by peer address. Filled only on request. */
   const [hostnames, setHostnames] = useState<Record<string, string>>({});
@@ -207,10 +212,7 @@ export function DetailsPanel({
    * button and its Delete key, and answers "no" by default.
    */
   const removeTracker = async (id: number, announce: string) => {
-    const ok = await ask(t("Are you sure to remove tracker '%s'?", { 1: announce }), {
-      title: t("Remove tracker"),
-      kind: "warning",
-    });
+    const ok = await new Promise<boolean>((resolve) => setTrackerRemoveAsk({ announce, resolve }));
     if (!ok) return;
     try {
       await rpc.setTorrent([detail.id], { trackerRemove: [id] });
@@ -617,6 +619,17 @@ export function DetailsPanel({
                     // in the shortcut table because it only means anything while
                     // this table has focus.
                     tabIndex={0}
+                    // A click on a cell does not leave the row focused - the
+                    // keyboard stays on the document, and Delete has nothing to
+                    // delete - so the mouse's default handling is stopped and
+                    // the row takes the focus by hand, which is the original's
+                    // cursor landing on the row that was clicked. (Whether this
+                    // is enough to make the key work could not be confirmed on
+                    // screen: see the note in PARITY.)
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.focus();
+                    }}
                     onKeyDown={(e) => {
                       if (e.key !== "Delete" && e.key !== "Backspace") return;
                       e.preventDefault();
@@ -695,6 +708,20 @@ export function DetailsPanel({
           onSubmit={async (url) => {
             await rpc.setTorrent([detail.id], { trackerReplace: [trackerEdit.id, url] });
             onRefresh();
+          }}
+        />
+      )}
+
+      {trackerRemoveAsk && (
+        <ConfirmDialog
+          title={t("Remove tracker")}
+          message={t("Are you sure to remove tracker '%s'?", { 1: trackerRemoveAsk.announce })}
+          onConfirm={() => trackerRemoveAsk.resolve(true)}
+          onClose={() => {
+            // A promise keeps its first answer, so the resolve after a yes is a
+            // no-op (see the same pairing in App).
+            trackerRemoveAsk.resolve(false);
+            setTrackerRemoveAsk(null);
           }}
         />
       )}

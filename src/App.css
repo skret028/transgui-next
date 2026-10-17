@@ -704,6 +704,13 @@ table.sub-table td.empty {
   padding: 10px 14px;
   border-top: 1px solid #313640;
 }
+/* A confirmation's question: the original's wording wraps, and some WordWrap in
+   it comes through as a real line break. */
+.confirm-text {
+  margin: 0;
+  white-space: pre-line;
+  line-height: 1.45;
+}
 /* Two-column checklist used by the column picker. */
 .col-picker {
   display: grid;

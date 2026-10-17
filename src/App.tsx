@@ -12,7 +12,7 @@ import {
 } from "./splitSizes";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ask, message, open, save } from "@tauri-apps/plugin-dialog";
+import { message, open, save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { rpc } from "./api";
 import {
@@ -121,6 +121,7 @@ import {
   useT,
 } from "./i18n";
 import { ConnectionBar } from "./components/ConnectionBar";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Toolbar } from "./components/Toolbar";
 import { DEFAULT_SPEEDS, speedMenuItems } from "./speedPresets";
 import { TorrentTable } from "./components/TorrentTable";
@@ -297,6 +298,12 @@ function AppInner() {
   const [showProps, setShowProps] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showColumns, setShowColumns] = useState(false);
+  // The question a confirmation is asking, with the waiting answer's resolve.
+  const [confirmAsk, setConfirmAsk] = useState<{
+    title: string;
+    message: string;
+    resolve: (ok: boolean) => void;
+  } | null>(null);
   const [statsDir, setStatsDir] = useState("");
   const [dragging, setDragging] = useState(false);
 
@@ -732,6 +739,18 @@ function AppInner() {
     else setError(t("Could not copy to the clipboard"));
   }, [torrents, selection, t]);
 
+  /**
+   * Ask a question and wait for the answer - in the app's own dialog rather than
+   * a system alert, so that "no" is the default answer and the question is
+   * visible to the accessibility tools this app is checked with. See
+   * ConfirmDialog for why that matters here.
+   */
+  const confirmAskUser = useCallback(
+    (title: string, message: string) =>
+      new Promise<boolean>((resolve) => setConfirmAsk({ title, message, resolve })),
+    [],
+  );
+
   const action = useCallback(
     async (act: string) => {
       const ids = [...selection];
@@ -742,9 +761,9 @@ function AppInner() {
       // Destroying the payload is the one irreversible action here, so it gets
       // its own name and an explicit confirmation.
       if (act === "remove_with_data") {
-        const ok = await ask(
+        const ok = await confirmAskUser(
+          t("Remove and delete data"),
           t("Delete {n} torrent(s) and their downloaded data?", { n: ids.length }),
-          { title: t("Remove and delete data"), kind: "warning" },
         );
         if (!ok) return;
       }
@@ -753,11 +772,11 @@ function AppInner() {
       // first and answers "no" by default, and so does this.
       if (act === "verify") {
         const name = torrents.find((x) => x.id === ids[0])?.name ?? "";
-        const ok = await ask(
+        const ok = await confirmAskUser(
+          t("Verify"),
           ids.length === 1
             ? t("Torrent verification may take a long time.~Are you sure to start verification of torrent '%s'?", { 1: name })
             : t("Torrents verification may take a long time.~Are you sure to start verification of %d torrents?", { 1: ids.length }),
-          { title: t("Verify"), kind: "warning" },
         );
         if (!ok) return;
       }
@@ -769,7 +788,7 @@ function AppInner() {
         setError(String(e));
       }
     },
-    [selection, torrents, refresh, refreshDetail, t],
+    [selection, torrents, refresh, refreshDetail, t, confirmAskUser],
   );
 
   /**
@@ -1000,9 +1019,10 @@ function AppInner() {
         await message(text);
         return;
       }
-      const ok = await ask(`${text}\n\n${t("Update trackers for the existing torrent?")}`, {
-        kind: "info",
-      });
+      const ok = await confirmAskUser(
+        t("Add tracker"),
+        `${text}\n\n${t("Update trackers for the existing torrent?")}`,
+      );
       if (!ok) return;
       try {
         await rpc.setTorrent([id], { trackerAdd: fresh });
@@ -1010,7 +1030,7 @@ function AppInner() {
         setError(String(e));
       }
     },
-    [t, torrents],
+    [t, torrents, confirmAskUser],
   );
 
   /**
@@ -1591,6 +1611,15 @@ function AppInner() {
       const tag = el?.tagName;
       const typing =
         tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable === true;
+      // A dialog covers the list, so the list's shortcuts are not in play while
+      // one is up - the original's dialogs are modal in the same way. Without
+      // this, Delete pressed at a confirmation would have removed a torrent
+      // from under the question.
+      if (document.querySelector(".modal-backdrop")) return;
+      // Something inside the window has already taken the key - the tracker
+      // table's Delete, for one, which would otherwise also remove the selected
+      // torrent on its way past this handler.
+      if (e.defaultPrevented) return;
       const hit = resolveShortcut(e, {
         typing,
         connected,
@@ -2454,6 +2483,20 @@ function AppInner() {
             // prompt's own onClose would otherwise clear the flag the failed
             // connect just set.
             if (!ok) throw new Error(t("Still not authorised - check the password"));
+          }}
+        />
+      )}
+
+      {confirmAsk && (
+        <ConfirmDialog
+          title={confirmAsk.title}
+          message={confirmAsk.message}
+          onConfirm={() => confirmAsk.resolve(true)}
+          onClose={() => {
+            // A promise keeps its first answer, so the resolve that follows a
+            // yes (see ConfirmDialog) changes nothing.
+            confirmAsk.resolve(false);
+            setConfirmAsk(null);
           }}
         />
       )}
