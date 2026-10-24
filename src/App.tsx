@@ -758,13 +758,24 @@ function AppInner() {
         setError(t("Select a torrent in the list first"));
         return;
       }
-      // Destroying the payload is the one irreversible action here, so it gets
-      // its own name and an explicit confirmation.
-      if (act === "remove_with_data") {
-        const ok = await confirmAskUser(
-          t("Remove and delete data"),
-          t("Delete {n} torrent(s) and their downloaded data?", { n: ids.length }),
-        );
+      // Both removals ask first, as the original does. The payload is what makes
+      // one of them irreversible, but the other still takes the torrent out of
+      // the list, and the original questions both - the question that is only
+      // asked sometimes is the one that gets answered by mistake.
+      if (act === "remove" || act === "remove_with_data") {
+        const withData = act === "remove_with_data";
+        const name = torrents.find((x) => x.id === ids[0])?.name ?? "";
+        let message: string;
+        if (ids.length === 1) {
+          message = withData
+            ? t("Are you sure to remove torrent '%s' and all associated DATA?", { 1: name })
+            : t("Are you sure to remove torrent '%s'?", { 1: name });
+        } else {
+          message = withData
+            ? t("Are you sure to remove %d selected torrents and all their associated DATA?", { 1: ids.length })
+            : t("Are you sure to remove %d selected torrents?", { 1: ids.length });
+        }
+        const ok = await confirmAskUser(withData ? t("Remove and delete data") : t("Remove torrent"), message);
         if (!ok) return;
       }
       // Verifying re-reads every piece from disk, which on a large torrent takes
@@ -2406,6 +2417,7 @@ function AppInner() {
                 setDetail(null);
               }}
               onRefresh={refreshDetail}
+              onConfirm={confirmAskUser}
               tab={detailsTab}
               onTabChange={setDetailsTab}
             />

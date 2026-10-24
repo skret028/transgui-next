@@ -15,7 +15,6 @@ import {
 } from "../format";
 import { PromptDialog } from "./PromptDialog";
 import { MoveLocationDialog } from "./MoveLocationDialog";
-import { ConfirmDialog } from "./ConfirmDialog";
 
 interface Props {
   detail: TorrentDetail | null;
@@ -42,6 +41,13 @@ interface Props {
   onMoved?: (location: string) => void;
   onClose: () => void;
   onRefresh: () => void;
+  /**
+   * Ask a question with Yes and No. The app owns the dialog, so that a
+   * confirmation raised from inside this panel is the same one the list's own
+   * actions raise - and so that it is not drawn inside the panel's box, where it
+   * could end up clipped or behind the panel entirely.
+   */
+  onConfirm: (title: string, message: string) => Promise<boolean>;
   /**
    * Which page is showing. Held by the caller so the original's Alt+G/K/P/F can
    * jump straight to one; the panel itself only reports the tab that was
@@ -102,6 +108,7 @@ export function DetailsPanel({
   onMoved,
   onClose,
   onRefresh,
+  onConfirm,
   /** The height the divider has been dragged to; the default comes from the CSS. */
   height,
   fromNow,
@@ -114,11 +121,6 @@ export function DetailsPanel({
   const [renaming, setRenaming] = useState<{ path: string; initial: string } | null>(null);
   const [trackerAdd, setTrackerAdd] = useState(false);
   const [trackerEdit, setTrackerEdit] = useState<{ id: number; url: string } | null>(null);
-  // The tracker whose removal is being confirmed, with the waiting answer.
-  const [trackerRemoveAsk, setTrackerRemoveAsk] = useState<{
-    announce: string;
-    resolve: (ok: boolean) => void;
-  } | null>(null);
   const [moving, setMoving] = useState(false);
   /** Reverse-DNS results, keyed by peer address. Filled only on request. */
   const [hostnames, setHostnames] = useState<Record<string, string>>({});
@@ -212,7 +214,10 @@ export function DetailsPanel({
    * button and its Delete key, and answers "no" by default.
    */
   const removeTracker = async (id: number, announce: string) => {
-    const ok = await new Promise<boolean>((resolve) => setTrackerRemoveAsk({ announce, resolve }));
+    const ok = await onConfirm(
+      t("Remove tracker"),
+      t("Are you sure to remove tracker '%s'?", { 1: announce }),
+    );
     if (!ok) return;
     try {
       await rpc.setTorrent([detail.id], { trackerRemove: [id] });
@@ -708,20 +713,6 @@ export function DetailsPanel({
           onSubmit={async (url) => {
             await rpc.setTorrent([detail.id], { trackerReplace: [trackerEdit.id, url] });
             onRefresh();
-          }}
-        />
-      )}
-
-      {trackerRemoveAsk && (
-        <ConfirmDialog
-          title={t("Remove tracker")}
-          message={t("Are you sure to remove tracker '%s'?", { 1: trackerRemoveAsk.announce })}
-          onConfirm={() => trackerRemoveAsk.resolve(true)}
-          onClose={() => {
-            // A promise keeps its first answer, so the resolve after a yes is a
-            // no-op (see the same pairing in App).
-            trackerRemoveAsk.resolve(false);
-            setTrackerRemoveAsk(null);
           }}
         />
       )}

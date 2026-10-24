@@ -520,7 +520,6 @@
   "Ratio limit": "比率上限",
   "More actions": "更多操作",
   "Remove and delete data": "移除并删除数据",
-  "Delete {n} torrent(s) and their downloaded data?": "删除 {n} 个种子及其已下载的数据？此操作不可撤销。",
   "Torrent count": "种子数",
   "Paused": "已暂停",
   "Free disk space:": "磁盘剩余空间：",

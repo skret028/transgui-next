@@ -161,8 +161,6 @@ when the folder stopped doing that.
   even when the add named no trackers, in which case answering yes does nothing.
   Telling the user it is already there - and asking only when answering can
   actually change something - keeps the information without the dead question.
-- **Remove asks for confirmation only when the data goes with it.** The original
-  confirms both; here only the irreversible action does.
 - **Daemon and application options are one settings dialog** with sections,
   rather than the original's separate `daemonoptions` / `options` windows.
 - **RTL layout is not implemented** — not a gap: the original ships no
