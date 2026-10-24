@@ -142,7 +142,6 @@ import { LicenseDialog } from "./components/LicenseDialog";
 import { StatsDialog } from "./components/StatsDialog";
 import { ColumnsDialog } from "./components/ColumnsDialog";
 import { FilterPane } from "./components/FilterPane";
-import { ViewMenu } from "./components/ViewMenu";
 import { ContextMenu, type MenuItem } from "./components/ContextMenu";
 import { DEFAULT_COLUMNS, normalizeColumns, type ColumnId } from "./columns";
 import { notify } from "./notify";
@@ -2464,7 +2463,6 @@ function AppInner() {
             </option>
           ))}
         </select>
-        <ViewMenu view={viewOptions} onChange={changeViewOptions} />
         <button className="btn" onClick={() => setShowColumns(true)}>
           {t("Columns")}…
         </button>
