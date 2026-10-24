@@ -121,7 +121,7 @@ import {
   useI18n,
   useT,
 } from "./i18n";
-import { ConnectionBar } from "./components/ConnectionBar";
+import { ConnectionsDialog } from "./components/ConnectionsDialog";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Toolbar } from "./components/Toolbar";
 import { DEFAULT_SPEEDS, speedMenuItems } from "./speedPresets";
@@ -309,6 +309,8 @@ function AppInner() {
 
   const [servers, setServers] = useState<ServerBookmark[]>([]);
   const [selectedServerId, setSelectedServerId] = useState("");
+  /** The connection settings live in their own dialog, as in the original. */
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   /** Daemon session values backing the quick alt-speed and limit controls. */
   const [session, setSession] = useState<SessionInfo | null>(null);
   /** Whether the window is currently hidden/backgrounded. */
@@ -2043,10 +2045,20 @@ function AppInner() {
         case "add-link":
           setShowAdd(true);
           return;
-        // The original gives these their own dialogs or tabs; this app keeps
-        // connections, daemon options, blocklist and GeoIP inside settings, so
-        // the menu opens settings rather than pretending otherwise.
+        // The original gives these their own dialogs or tabs. Connections have
+        // one of their own now; daemon options, blocklist, GeoIP and the status
+        // bar sizes still live inside settings, so the menu opens settings for
+        // them rather than pretending otherwise.
         case "connections":
+          setConnectionsOpen(true);
+          return;
+        case "new-connection":
+          // A new connection starts from a blank form, which is what the
+          // original's New connection does. Nothing is cleared while the app is
+          // connected: those fields are the live connection.
+          if (!connected) setForm({ ...DEFAULT_FORM });
+          setConnectionsOpen(true);
+          return;
         case "daemon-options":
         case "app-options":
         case "blocklist":
@@ -2468,25 +2480,6 @@ function AppInner() {
         </button>
       </header>
 
-      <ConnectionBar
-        form={form}
-        connected={connected}
-        connecting={connecting}
-        servers={servers}
-        selectedServerId={selectedServerId}
-        onChange={setField}
-        onConnect={() => {
-          // An explicit connect is the user changing their mind about the
-          // disconnect above, so the retry loop is theirs again.
-          userDisconnected.current = false;
-          void connect();
-        }}
-        onDisconnect={disconnect}
-        onSelectServer={selectServer}
-        onSaveServer={saveServer}
-        onDeleteServer={deleteServer}
-        onRenameServer={renameServer}
-      />
 
       {error && <div className="error">{error}</div>}
       {notice && <div className="notice">{notice}</div>}
@@ -2805,6 +2798,29 @@ function AppInner() {
 
       {showStats && (
         <StatsDialog downloadDir={statsDir} onClose={() => setShowStats(false)} />
+      )}
+
+      {connectionsOpen && (
+        <ConnectionsDialog
+          form={form}
+          connected={connected}
+          connecting={connecting}
+          servers={servers}
+          selectedServerId={selectedServerId}
+          onChange={setField}
+          onConnect={() => {
+            // An explicit connect is the user changing their mind about the
+            // disconnect, so the retry loop is theirs again.
+            userDisconnected.current = false;
+            void connect();
+          }}
+          onDisconnect={disconnect}
+          onSelectServer={selectServer}
+          onSaveServer={saveServer}
+          onDeleteServer={deleteServer}
+          onRenameServer={renameServer}
+          onClose={() => setConnectionsOpen(false)}
+        />
       )}
 
       {showColumns && (

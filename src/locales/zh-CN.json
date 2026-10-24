@@ -674,5 +674,6 @@
   "Answer within": "响应超时",
   "Reach the daemon within": "连接超时",
   "seconds; 0 in the next one means this": "秒；下面填 0 就用这个值",
-  "seconds; 0 uses the one above": "秒；0 表示用上面那个值"
+  "seconds; 0 uses the one above": "秒；0 表示用上面那个值",
+  "Connection": "连接"
 }

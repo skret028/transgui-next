@@ -616,10 +616,13 @@ fn build_app_menu(app: &AppHandle, sync: &MenuSync) -> tauri::Result<Menu<tauri:
         .item(&plain_key("cmd:q-bottom", "置底", "CmdOrCtrl+Shift+2")?)
         .build()?;
 
-    // The original's Torrent menu, in its order. The two connection entries open
-    // the settings dialog, where this app keeps them (its own deliberate merge).
+    // The original's Torrent menu, in its order. Its first three entries are the
+    // connection ones; they open the connections dialog, which is where the
+    // original keeps the host, the TLS certificate and the proxy.
     let file_menu = SubmenuBuilder::new(app, "文件")
-        .item(&plain("cmd:connections", "连接管理…")?)
+        .item(&plain("cmd:new-connection", "新建连接配置…")?)
+        .item(&plain("cmd:connections", "管理连接配置…")?)
+        .separator()
         .item(&plain("cmd:disconnect", "断开连接")?)
         .separator()
         .item(&plain("cmd:add-torrent", "添加种子…")?)

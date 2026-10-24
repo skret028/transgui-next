@@ -85,53 +85,101 @@ body,
   opacity: 0.5;
 }
 
-/* ---- connection form ---- */
-.conn-form {
+/* ---- connection dialog ---- */
+.conn-profiles {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: #1f2329;
-  border-bottom: 1px solid #313640;
   flex-wrap: wrap;
+  margin-bottom: 14px;
 }
-.conn-form input {
-  background: #14171b;
-  border: 1px solid #363c46;
-  border-radius: 6px;
-  padding: 5px 8px;
-  color: inherit;
-  min-width: 90px;
-  outline: none;
-}
-.conn-form input:focus {
-  border-color: #3b82f6;
-}
-.conn-form input:disabled {
-  opacity: 0.55;
-}
-.server-select,
-.conn-form input.narrow-wide {
+.conn-profiles input.narrow-wide {
+  flex: 1;
+  min-width: 140px;
   background: #14171b;
   border: 1px solid #363c46;
   border-radius: 6px;
   padding: 5px 8px;
   color: inherit;
   outline: none;
-  min-width: 110px;
 }
-.server-select:focus {
+.server-select {
+  background: #14171b;
+  border: 1px solid #363c46;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: inherit;
+  outline: none;
+  min-width: 130px;
+}
+.server-select:focus,
+.conn-profiles input.narrow-wide:focus {
   border-color: #3b82f6;
 }
 .server-select:disabled {
   opacity: 0.55;
 }
-.conn-sep {
-  width: 1px;
-  height: 20px;
-  background: #363c46;
-  margin: 0 2px;
+/* The original's Connection / Proxy pages. */
+.conn-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid #313640;
+  margin-bottom: 14px;
 }
+.conn-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #9aa4b2;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.conn-tab:hover {
+  color: inherit;
+}
+.conn-tab.active {
+  color: #e8ecf1;
+  border-bottom-color: #3b82f6;
+}
+.conn-grid {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px 12px;
+  align-items: center;
+}
+.conn-grid input[type="text"],
+.conn-grid input[type="password"],
+.conn-grid input:not([type]) {
+  width: 100%;
+  max-width: 320px;
+  background: #14171b;
+  border: 1px solid #363c46;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: inherit;
+  outline: none;
+}
+.conn-grid input:focus {
+  border-color: #3b82f6;
+}
+.conn-grid input:disabled {
+  opacity: 0.55;
+}
+.conn-grid .chk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.conn-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal-foot .grow {
+  flex: 1;
+}
+
 input.narrow {
   width: 70px;
   min-width: 0;
