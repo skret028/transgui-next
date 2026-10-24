@@ -554,6 +554,61 @@ fn register_global_shortcut(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Clamp a window rectangle into a work area: shrink it to fit, then slide it in.
+///
+/// Returns (x, y, width, height). Split out from the window calls so the
+/// arithmetic can be checked without a display.
+fn clamp_rect(
+    (x, y): (i32, i32),
+    (w, h): (i32, i32),
+    (ax, ay, aw, ah): (i32, i32, i32, i32),
+) -> (i32, i32, i32, i32) {
+    let new_w = w.min(aw).max(1);
+    let new_h = h.min(ah).max(1);
+    // clamp wants lo <= hi; on a work area narrower than the window that only
+    // holds after the size above has already been cut down to fit.
+    let new_x = x.clamp(ax, (ax + aw - new_w).max(ax));
+    let new_y = y.clamp(ay, (ay + ah - new_h).max(ay));
+    (new_x, new_y, new_w, new_h)
+}
+
+/// Keep the restored window inside the screen it opens on.
+///
+/// The window state plugin brings back whatever geometry was saved, and a size
+/// that suited a larger display leaves the right-hand end of the toolbar - the
+/// View menu, columns, limits, settings - past the edge of the screen, where it
+/// cannot be clicked at all. Since everything this app does starts from that
+/// toolbar, the restored size and position are clamped to the work area of the
+/// monitor the window lands on. A window that already fits is left alone.
+fn fit_window_to_screen(win: &tauri::WebviewWindow) {
+    let (Ok(size), Ok(pos)) = (win.outer_size(), win.outer_position()) else {
+        return;
+    };
+    let monitor = win
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| win.primary_monitor().ok().flatten());
+    let Some(monitor) = monitor else { return };
+    let area = monitor.work_area();
+    let (x, y, w, h) = clamp_rect(
+        (pos.x, pos.y),
+        (size.width as i32, size.height as i32),
+        (
+            area.position.x,
+            area.position.y,
+            area.size.width as i32,
+            area.size.height as i32,
+        ),
+    );
+    if (w as u32, h as u32) != (size.width, size.height) {
+        let _ = win.set_size(tauri::PhysicalSize::new(w as u32, h as u32));
+    }
+    if (x, y) != (pos.x, pos.y) {
+        let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Install the rustls crypto provider before anything builds a TLS client;
@@ -667,6 +722,12 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Before anything else looks at the window: the saved geometry may
+            // be bigger than this screen, and a window whose toolbar runs off
+            // the edge cannot be driven at all.
+            if let Some(win) = app.get_webview_window("main") {
+                fit_window_to_screen(&win);
+            }
             app.manage(geoip::GeoIp::default());
             let handle = app.handle().clone();
             build_tray(&handle)?;
@@ -726,4 +787,65 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(handle_run_event);
+}
+
+#[cfg(test)]
+mod window_fit_tests {
+    use super::clamp_rect;
+
+    // The work area of the machine the oversized-window trouble showed up on:
+    // a 1280x720 screen with the menu bar taking the top 76 points.
+    const SCREEN: (i32, i32, i32, i32) = (0, 76, 1280, 613);
+
+    #[test]
+    fn a_window_that_fits_is_left_alone() {
+        assert_eq!(
+            clamp_rect((100, 100), (900, 500), SCREEN),
+            (100, 100, 900, 500)
+        );
+    }
+
+    #[test]
+    fn a_window_wider_than_the_screen_is_narrowed() {
+        // 1760 wide was what a larger display had saved, and it put the right
+        // end of the toolbar - View, columns, limits - off the screen.
+        assert_eq!(
+            clamp_rect((280, 31), (1760, 613), SCREEN),
+            (0, 76, 1280, 613)
+        );
+    }
+
+    #[test]
+    fn a_window_past_the_right_edge_slides_back_in() {
+        assert_eq!(
+            clamp_rect((1000, 200), (800, 400), SCREEN),
+            (480, 200, 800, 400)
+        );
+    }
+
+    #[test]
+    fn a_window_above_the_menu_bar_slides_down() {
+        assert_eq!(
+            clamp_rect((50, -300), (600, 400), SCREEN),
+            (50, 76, 600, 400)
+        );
+    }
+
+    #[test]
+    fn a_window_taller_than_the_screen_is_shortened() {
+        assert_eq!(
+            clamp_rect((10, 10), (600, 2000), SCREEN),
+            (10, 76, 600, 613)
+        );
+    }
+
+    #[test]
+    fn a_window_on_a_display_to_the_left_comes_back() {
+        // A second display at negative x that is no longer attached: the saved
+        // position has to land on this one.
+        assert_eq!(
+            clamp_rect((-1600, 100), (900, 500), SCREEN),
+            (0, 100, 900, 500)
+        );
+    }
 }

@@ -345,15 +345,14 @@ Two bugs the closed-loop checks turned up on the way, both fixed:
   and did not look at that, so Delete aimed at a tracker would also have removed
   the selected torrent. The window handler now ignores a key something inside
   the window has already taken.
-- **Delete on a tracker row is written but could not be shown to work.** The row
-  is focusable and handles Delete and Backspace, and it now takes the focus when
-  it is clicked (a click on a cell leaves the keyboard on the document). On
-  screen, a click on the row followed by Delete, Backspace or forward-Delete
-  produced no question in any arrangement tried, and the panel's Remove button
-  could not be located reliably enough to drive either - so the tracker's own
-  confirmation is checked only as far as its code path goes, not on screen. The
-  first attempts clicked an element in the wrong pane entirely, which is part of
-  why this took as long as it did; re-checking on a real machine is the next step.
+- **Delete on a tracker row.** The row is focusable, handles Delete and
+  Backspace, and takes the focus when it is clicked (a click on a cell leaves
+  the keyboard on the document). Confirmed by hand: click a tracker row, press
+  Delete, and the original's question is asked before the tracker goes. Only the
+  code path could be checked from this side for a long time, because the window
+  had been left wider than this machine's screen - the details panel's rows sat
+  partly past the edge, so the clicks aimed at them were landing on another
+  application's window.
   The forward-Delete key is what triggers the *window's* Delete, matching the
   original: on macOS the key next to the arrows reports itself as Backspace, and
   only forward-Delete is `Delete` in both programs.
