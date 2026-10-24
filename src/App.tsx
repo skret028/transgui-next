@@ -2033,6 +2033,164 @@ function AppInner() {
     return () => unlisten?.();
   }, []);
 
+  // The menu bar: File, View, Tools and Help, laid out as the original lays its
+  // own out. Each item sends a command name; this runs the very helper the
+  // toolbar button or the keyboard shortcut runs, so the three cannot drift.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const run = (command: string) => {
+      switch (command) {
+        case "add-torrent":
+        case "add-link":
+          setShowAdd(true);
+          return;
+        // The original gives these their own dialogs or tabs; this app keeps
+        // connections, daemon options, blocklist and GeoIP inside settings, so
+        // the menu opens settings rather than pretending otherwise.
+        case "connections":
+        case "daemon-options":
+        case "app-options":
+        case "blocklist":
+        case "geoip":
+        case "status-sizes":
+          setShowSettings(true);
+          return;
+        case "disconnect":
+          void disconnect();
+          return;
+        case "select-all":
+          selectAll();
+          return;
+        case "columns":
+          setShowColumns(true);
+          return;
+        case "export":
+          void exportSettings()
+            .then((m) => {
+              if (m) setNotice(m);
+            })
+            .catch((e) => setError(String(e)));
+          return;
+        case "import":
+          void importSettings()
+            .then((m) => {
+              if (m) setNotice(m);
+            })
+            .catch((e) => setError(String(e)));
+          return;
+        case "move-data":
+          setMoveOpen(true);
+          return;
+        case "labels":
+          setShowLabels(true);
+          return;
+        case "rename":
+          setRenameOpen(true);
+          return;
+        case "props":
+          setShowProps(true);
+          return;
+        case "prio-high":
+          void setPriority(1);
+          return;
+        case "prio-normal":
+          void setPriority(0);
+          return;
+        case "prio-low":
+          void setPriority(-1);
+          return;
+        case "no-download":
+          void setNotDownload();
+          return;
+        case "alt-speed":
+          void toggleAltSpeed();
+          return;
+        case "start-all":
+          void globalAction("start_all");
+          return;
+        case "stop-all":
+          void globalAction("stop_all");
+          return;
+        case "q-top":
+          void action("queue_top");
+          return;
+        case "q-up":
+          void action("queue_up");
+          return;
+        case "q-down":
+          void action("queue_down");
+          return;
+        case "q-bottom":
+          void action("queue_bottom");
+          return;
+        case "remove":
+        case "remove-data":
+        case "start":
+        case "start-now":
+        case "stop":
+        case "verify":
+        case "reannounce":
+          void action(command === "remove-data" ? "remove_with_data" : command);
+          return;
+        case "toolbar":
+          changeViewOptions({ ...viewOptions, toolbar: !viewOptions.toolbar });
+          return;
+        case "filter-pane":
+          changeViewOptions({ ...viewOptions, filterPane: !viewOptions.filterPane });
+          return;
+        case "info-pane":
+          changeViewOptions({ ...viewOptions, details: !viewOptions.details });
+          return;
+        case "status-bar":
+          changeViewOptions({ ...viewOptions, statusBar: !viewOptions.statusBar });
+          return;
+        case "big-toolbar":
+          changeViewOptions({ ...viewOptions, bigToolbar: !viewOptions.bigToolbar });
+          return;
+        case "folder-grouping":
+          changeViewOptions({
+            ...viewOptions,
+            folderGrouping: !viewOptions.folderGrouping,
+          });
+          return;
+        case "label-grouping":
+          changeViewOptions({
+            ...viewOptions,
+            labelGrouping: !viewOptions.labelGrouping,
+          });
+          return;
+        case "tracker-grouping":
+          changeViewOptions({
+            ...viewOptions,
+            trackerGrouping: !viewOptions.trackerGrouping,
+          });
+          return;
+        default:
+          return;
+      }
+    };
+    void (async () => {
+      try {
+        unlisten = await listen<string>("menu://command", (ev) => run(ev.payload));
+      } catch {
+        // not running under Tauri
+      }
+    })();
+    return () => unlisten?.();
+  }, [
+    action,
+    changeViewOptions,
+    disconnect,
+    exportSettings,
+    globalAction,
+    importSettings,
+    selectAll,
+    setNotDownload,
+    setPriority,
+    toggleAltSpeed,
+    viewOptions,
+  ]);
+
   // The original's "check for a new version every N days". Runs at startup and
   // then on a slow tick; updateCheckDue decides whether anything is owed, so a
   // machine that was asleep for a week picks the check up when it wakes rather
@@ -2110,6 +2268,27 @@ function AppInner() {
     const up = speedMenuItems(upSpeeds, trayUpEnabled ? trayUpKbps : null);
     return Array.from(new Set([...down, ...up])).sort((a, b) => a - b);
   }, [downSpeeds, upSpeeds, trayDownEnabled, trayDownKbps, trayUpEnabled, trayUpKbps]);
+
+  // The application menu's check marks. Same trigger as the tray's: whenever the
+  // panes, the grouping or the alternate-speed flag move, the menu is told, and
+  // the backend rebuilds it only when something actually changed.
+  useEffect(() => {
+    void rpc
+      .setMenuState({
+        toolbar: viewOptions.toolbar,
+        filter_pane: viewOptions.filterPane,
+        details: viewOptions.details,
+        status_bar: viewOptions.statusBar,
+        big_toolbar: viewOptions.bigToolbar,
+        folder_grouping: viewOptions.folderGrouping,
+        label_grouping: viewOptions.labelGrouping,
+        tracker_grouping: viewOptions.trackerGrouping,
+        alt_speed: trayAltSpeed,
+      })
+      .catch(() => {
+        // not running under Tauri
+      });
+  }, [viewOptions, trayAltSpeed]);
 
   useEffect(() => {
     void rpc

@@ -26,6 +26,20 @@ export interface TraySync {
   speeds: number[];
 }
 
+/** What the application menu's check marks are built from; matches the Rust
+ *  struct field for field. */
+export interface MenuSync {
+  toolbar: boolean;
+  filter_pane: boolean;
+  details: boolean;
+  status_bar: boolean;
+  big_toolbar: boolean;
+  folder_grouping: boolean;
+  label_grouping: boolean;
+  tracker_grouping: boolean;
+  alt_speed: boolean;
+}
+
 export const rpc = {
   connect: (form: ConnForm, net?: { httpTimeout: number; connectTimeout: number }) =>
     invoke<ConnectResult>("rpc_connect", {
@@ -64,6 +78,12 @@ export const rpc = {
    * actually changed.
    */
   setTrayState: (sync: TraySync) => invoke<void>("set_tray_state", { sync }),
+
+  /**
+   * The application menu's check marks, sent the same way and for the same
+   * reason as the tray's. The backend rebuilds the menu only when a value moved.
+   */
+  setMenuState: (sync: MenuSync) => invoke<void>("set_menu_state", { sync }),
 
   /** Tells the backend whether the tray icon stays visible while the window is shown. */
   setTrayAlwaysVisible: (always: boolean) =>

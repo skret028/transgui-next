@@ -494,7 +494,66 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 /// every text field, which is a worse regression than a missing Help menu.
 /// Help carries what the original's did - a link to the project's home page
 /// and to the original it is a rewrite of - plus a native About panel.
-fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+/// The application menu.
+/// What the application menu's check marks have to say.
+///
+/// Same shape of problem as the tray menu: the checks belong to the interface
+/// (which panes are showing, which grouping is on) and to the daemon (alternate
+/// speed). The window sends this down whenever either changes and the menu is
+/// rebuilt from it, which is how the tray is kept honest too.
+#[derive(Clone, Default, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MenuSync {
+    toolbar: bool,
+    filter_pane: bool,
+    details: bool,
+    status_bar: bool,
+    big_toolbar: bool,
+    folder_grouping: bool,
+    label_grouping: bool,
+    tracker_grouping: bool,
+    alt_speed: bool,
+}
+
+pub struct MenuState(Mutex<MenuSync>);
+
+/// Level the application menu's check marks with the interface and the daemon.
+#[tauri::command]
+fn set_menu_state(
+    app: AppHandle,
+    state: tauri::State<'_, MenuState>,
+    sync: MenuSync,
+) -> Result<(), String> {
+    {
+        let current = state.0.lock().map_err(|e| e.to_string())?;
+        if *current == sync {
+            return Ok(());
+        }
+    }
+    let menu = build_app_menu(&app, &sync).map_err(|e| e.to_string())?;
+    app.set_menu(menu).map_err(|e| e.to_string())?;
+    *state.0.lock().map_err(|e| e.to_string())? = sync;
+    Ok(())
+}
+
+/// The application menu, laid out the way the original lays its menu bar out.
+///
+/// File, View, Tools and Help, with the original's items in the original's
+/// order and its accelerators where macOS has the key. Three things are decided
+/// by the platform rather than copied:
+///
+/// - The application menu comes first, because macOS puts About, Services, Hide
+///   and Quit there and an app that leaves it out loses them. The original's
+///   Exit lives there as Quit.
+/// - Edit stays, because a WKWebView without it loses cut/copy/paste in every
+///   text field. It no longer carries Select All: the original has Select all
+///   under View, and Cmd+A is handled where the focus is - rows when the list
+///   has it, text when a field does.
+/// - Window stays for Minimize/Zoom/Close, which macOS expects to find there.
+///
+/// Everything is wired the same way: each item sends its command to the window,
+/// which runs the very function its toolbar button or keyboard shortcut runs.
+fn build_app_menu(app: &AppHandle, sync: &MenuSync) -> tauri::Result<Menu<tauri::Wry>> {
     // Built twice on purpose: the app menu keeps About where macOS expects to
     // find it, and Help carries one too, which is where the original puts it.
     let about_meta = || {
@@ -505,6 +564,17 @@ fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             .license(Some("GNU General Public License v2.0"))
             .website(Some("https://github.com/skret028/transgui-next"))
             .build()
+    };
+    let plain = |id: &str, label: &str| -> tauri::Result<MenuItem<tauri::Wry>> {
+        MenuItemBuilder::with_id(id, label).build(app)
+    };
+    let plain_key = |id: &str, label: &str, key: &str| -> tauri::Result<MenuItem<tauri::Wry>> {
+        MenuItemBuilder::with_id(id, label)
+            .accelerator(key)
+            .build(app)
+    };
+    let check = |id: &str, label: &str, on: bool, key: Option<&str>| {
+        CheckMenuItem::with_id(app, id, label, true, on, key)
     };
 
     let app_menu = SubmenuBuilder::new(app, "transgui-next")
@@ -530,7 +600,95 @@ fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .item(&PredefinedMenuItem::cut(app, Some("剪切"))?)
         .item(&PredefinedMenuItem::copy(app, Some("复制"))?)
         .item(&PredefinedMenuItem::paste(app, Some("粘贴"))?)
-        .item(&PredefinedMenuItem::select_all(app, Some("全选"))?)
+        .build()?;
+
+    let priority_menu = SubmenuBuilder::new(app, "优先级")
+        .item(&plain("cmd:prio-high", "高优先级")?)
+        .item(&plain("cmd:prio-normal", "普通优先级")?)
+        .item(&plain("cmd:prio-low", "低优先级")?)
+        .item(&plain("cmd:no-download", "不下载")?)
+        .build()?;
+
+    let queue_menu = SubmenuBuilder::new(app, "队列")
+        .item(&plain_key("cmd:q-top", "置顶", "CmdOrCtrl+Shift+1")?)
+        .item(&plain_key("cmd:q-up", "上移", "CmdOrCtrl+1")?)
+        .item(&plain_key("cmd:q-down", "下移", "CmdOrCtrl+2")?)
+        .item(&plain_key("cmd:q-bottom", "置底", "CmdOrCtrl+Shift+2")?)
+        .build()?;
+
+    // The original's Torrent menu, in its order. The two connection entries open
+    // the settings dialog, where this app keeps them (its own deliberate merge).
+    let file_menu = SubmenuBuilder::new(app, "文件")
+        .item(&plain("cmd:connections", "连接管理…")?)
+        .item(&plain("cmd:disconnect", "断开连接")?)
+        .separator()
+        .item(&plain("cmd:add-torrent", "添加种子…")?)
+        .item(&plain("cmd:add-link", "添加链接…")?)
+        .separator()
+        .item(&plain_key("cmd:start", "开始", "F3")?)
+        .item(&plain_key("cmd:start-now", "强制开始", "Shift+F3")?)
+        .item(&plain_key("cmd:start-all", "全部开始", "CmdOrCtrl+F3")?)
+        .item(&plain_key("cmd:stop", "停止", "F4")?)
+        .item(&plain_key("cmd:stop-all", "全部停止", "CmdOrCtrl+F4")?)
+        .separator()
+        .item(&plain("cmd:remove", "移除")?)
+        .item(&plain("cmd:remove-data", "移除并删除数据")?)
+        .separator()
+        .item(&priority_menu)
+        .item(&queue_menu)
+        .separator()
+        .item(&plain_key("cmd:reannounce", "重新汇报（获取更多节点）", "CmdOrCtrl+R")?)
+        .item(&plain("cmd:verify", "校验")?)
+        .separator()
+        .item(&plain_key("cmd:move-data", "移动数据…", "F6")?)
+        .item(&plain_key("cmd:labels", "设置标签…", "F7")?)
+        .item(&plain_key("cmd:rename", "重命名", "F2")?)
+        .item(&plain_key("cmd:props", "属性…", "Alt+Enter")?)
+        .separator()
+        .item(&plain("cmd:export", "导出设置…")?)
+        .item(&plain("cmd:import", "导入设置…")?)
+        .build()?;
+
+    // Select all has no accelerator here: Cmd+A belongs to whatever has the
+    // focus, and a menu key equivalent would take it away from text fields. The
+    // window's own handler covers both cases.
+    let view_menu = SubmenuBuilder::new(app, "查看")
+        .item(&plain("cmd:select-all", "全选")?)
+        .item(&plain("cmd:columns", "列设置…")?)
+        .separator()
+        .item(&check("cmd:folder-grouping", "文件夹分布", sync.folder_grouping, None)?)
+        .item(&check("cmd:label-grouping", "标签分组", sync.label_grouping, None)?)
+        .item(&check("cmd:tracker-grouping", "Tracker 分布", sync.tracker_grouping, None)?)
+        .separator()
+        .item(&check("cmd:filter-pane", "筛选面板", sync.filter_pane, Some("F11"))?)
+        .item(&check("cmd:info-pane", "详情面板", sync.details, Some("F12"))?)
+        .item(&check("cmd:toolbar", "工具栏", sync.toolbar, Some("CmdOrCtrl+F11"))?)
+        .item(&check("cmd:big-toolbar", "大工具条", sync.big_toolbar, None)?)
+        .item(&check("cmd:status-bar", "状态栏", sync.status_bar, None)?)
+        .item(&plain("cmd:status-sizes", "状态栏 - 尺寸")?)
+        .build()?;
+
+    let tools_menu = SubmenuBuilder::new(app, "工具")
+        .item(&plain_key("cmd:daemon-options", "Transmission 选项…", "F9")?)
+        .item(&plain_key("cmd:app-options", "程序选项…", "CmdOrCtrl+F9")?)
+        .separator()
+        .item(&check("cmd:alt-speed", "使用备用带宽设置", sync.alt_speed, Some("F8"))?)
+        .separator()
+        .item(&plain("cmd:blocklist", "更新黑名单")?)
+        .item(&plain("cmd:geoip", "更新 GeoIP 数据库")?)
+        .build()?;
+
+    let help_menu = SubmenuBuilder::new(app, "帮助")
+        .item(&plain("cmd:check-updates", "检查新版本")?)
+        .item(&plain("cmd:home", "访问主页")?)
+        .item(&plain("cmd:dev", "开发网站")?)
+        .separator()
+        .item(&plain("cmd:license", "许可证")?)
+        .item(&PredefinedMenuItem::about(
+            app,
+            Some("关于 transgui-next"),
+            Some(about_meta()),
+        )?)
         .build()?;
 
     let window_menu = SubmenuBuilder::new(app, "窗口")
@@ -540,23 +698,16 @@ fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .item(&PredefinedMenuItem::close_window(app, Some("关闭窗口"))?)
         .build()?;
 
-    // The original's Help menu: check for a new version, home page, the
-    // development site, then About.
-    let help_menu = SubmenuBuilder::new(app, "帮助")
-        .item(&MenuItemBuilder::with_id("help_check_updates", "检查新版本").build(app)?)
-        .item(&MenuItemBuilder::with_id("help_home", "访问主页").build(app)?)
-        .item(&MenuItemBuilder::with_id("help_dev", "开发网站").build(app)?)
-        .separator()
-        .item(&MenuItemBuilder::with_id("help_license", "许可证").build(app)?)
-        .item(&PredefinedMenuItem::about(
-            app,
-            Some("关于 transgui-next"),
-            Some(about_meta()),
-        )?)
-        .build()?;
-
     MenuBuilder::new(app)
-        .items(&[&app_menu, &edit_menu, &window_menu, &help_menu])
+        .items(&[
+            &app_menu,
+            &edit_menu,
+            &file_menu,
+            &view_menu,
+            &tools_menu,
+            &window_menu,
+            &help_menu,
+        ])
         .build()
 }
 
@@ -672,6 +823,7 @@ pub fn run() {
         .manage(CloseToTray(AtomicBool::new(true)))
         .manage(TrayAlwaysVisible::default())
         .manage(TrayState(Mutex::new(TraySync::default())))
+        .manage(MenuState(Mutex::new(MenuSync::default())))
         .manage(PendingOpens::default())
         .invoke_handler(tauri::generate_handler![
             rpc::rpc_connect,
@@ -695,6 +847,7 @@ pub fn run() {
             set_close_to_tray,
             set_tray_always_visible,
             set_tray_state,
+            set_menu_state,
             rpc_reveal_path,
             rpc_open_path,
             rpc_remove_file,
@@ -710,32 +863,38 @@ pub fn run() {
             resolve::resolve_host_names,
             update::check_for_updates,
         ])
-        .menu(build_app_menu)
+        .menu(|app| build_app_menu(app, &MenuSync::default()))
         .on_menu_event(|app, event| {
             use tauri_plugin_opener::OpenerExt;
-            match event.id().as_ref() {
-                "help_check_updates" => {
-                    // The window owns the update check (it needs the notice
-                    // line to show the result), so the menu only asks for it.
+            // Everything the menus do is decided in the window, where the same
+            // helper the toolbar button and the keyboard shortcut call lives -
+            // so a menu item, a button and a key can never drift apart.
+            let id = event.id().as_ref();
+            match id {
+                "cmd:check-updates" => {
                     let _ = app.emit("menu://check-updates", ());
                 }
-                "help_home" => {
+                "cmd:license" => {
+                    // The original has this as a tab of its About dialog; a
+                    // window of its own is where the webview can show it.
+                    let _ = app.emit("menu://license", ());
+                }
+                "cmd:home" => {
                     let _ = app.opener().open_url(
                         "https://github.com/transmission-remote-gui/transgui",
                         None::<&str>,
                     );
                 }
-                "help_dev" => {
+                "cmd:dev" => {
                     let _ = app
                         .opener()
                         .open_url("https://github.com/skret028/transgui-next", None::<&str>);
                 }
-                "help_license" => {
-                    // The original has this as a tab of its About dialog; a
-                    // window of its own is where the webview can show it.
-                    let _ = app.emit("menu://license", ());
+                other => {
+                    if let Some(command) = other.strip_prefix("cmd:") {
+                        let _ = app.emit("menu://command", command);
+                    }
                 }
-                _ => {}
             }
         })
         .setup(|app| {

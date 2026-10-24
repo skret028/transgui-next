@@ -66,8 +66,8 @@ settings export/import; clipboard watcher; tray icon, close-to-tray, global
 hotkey; smoothed transfer speeds; reduced polling while hidden; status-bar field
 picker; the torrent list's right-click menu; automatic reconnect after the
 daemon drops; filter groups by status, label, directory and tracker; remembered
-download directories with a native directory picker; an application menu with a
-Help menu and About panel; the original's keyboard shortcuts; 29 UI languages.
+download directories with a native directory picker; the original's menu bar - File, View, Tools and Help, with its items and
+accelerators; 29 UI languages.
 
 ## Not a gap: IPv6
 
@@ -98,6 +98,7 @@ implemented.
 | Asking for a password the daemon refuses | `passwcon` | **Done** — a 401 raises a prompt naming the host, with a masked field and a retry; it stays up with the refusal shown inline until the password works or it is dismissed, and the auto-reconnect stands aside while it is open. The original only asks when the saved password is literally `-` (ask-every-time); this asks whenever the daemon refuses the one it has, which is the case someone actually hits |
 | The tray menu | `pmTray` | **Done** — show and hide the window, start and stop every torrent, one submenu per direction for the speed limits, the alternative-speed toggle, quit. The original's tray is not its application menu: `pmTray` is its own eleven-item list, and this mirrors it item for item. The two speed submenus are filled from the list the toolbar uses rather than from the original's per-connection `DownSpeeds`/`UpSpeeds` setting, so the tray cannot offer a speed the button beside it does not |
 | About / help menu | `about.pas` | **Done** — a native Help menu with check for new version, home page, development site and About, plus an About panel in the app menu where macOS expects it |
+| The menu bar itself | `MainMenu` in `main.lfm`: File (`&Torrent`), View (`&View`), Tools (`T&ools`), Help (`&Help`) - 65 items over 60 actions | **Done** - the same four menus in the same order, with the original's items, submenus (Priority, Queue) and accelerators, in the system menu bar where a Mac app keeps them. Every item sends a command to the window, which runs the very helper the toolbar button and the keyboard shortcut run, so the three cannot drift apart. Accelerators are the original's, with Ctrl read as Cmd (Cmd+F3 start all, Cmd+1/2 queue, Cmd+R reannounce, F2/F6/F7/F8/F9 and their Cmd forms where the original has them). Three items are decided by the platform: the application menu comes first (About, Services, Hide, Quit - the original's Exit), Edit stays for cut/copy/paste in text fields, and Window stays for Minimize/Zoom/Close. Select all carries no menu accelerator because Cmd+A has to belong to whatever has the focus - the window handles it for rows and text alike. Connections, Transmission options, blocklist and GeoIP open the settings dialog, which is where this rewrite keeps them |
 | History of download/move directories | `folderhistory.pas` | **Done** — the Add dialog's directory field offers the last 10 (newest first, de-duplicated); kept beside the settings file, not in the exported settings |
 | Keyboard shortcuts beyond select-all | the original's `ShortCut` codes | **Done** — the original's bindings key by key: F2 rename, F3/F4 start/stop, Shift+F3 force start, Ctrl+F3/F4 start/stop everything, F6 move data, F8 alternative speeds, Del remove, Alt/Cmd/Shift+Del remove with data, Ins add torrent, F7 labels, Ctrl+Enter show the folder, Ctrl+H/N/L priority, Ctrl+I don't download, Ctrl+R reannounce, Ctrl+1/Ctrl+2 queue moves (with Ctrl+Shift+1/Ctrl+Shift+2 for the ends), Cmd+Enter properties, F9 settings, Ctrl+F12 big toolbar, Ctrl+A select all (`src/shortcuts.ts`, 87 assertions). Two of these were misread from the original on the first pass and are corrected here: Properties is Cmd+Enter (that action carries `scMeta`, not Alt) and the queue moves are the Ctrl+1/Ctrl+2 pair, not PgUp/PgDn. PgUp/PgDn are kept as an extra, since they take nothing away. The **Alt namespace** is there too, which the original hangs off the main form rather than off the actions: Alt+S to the filter box, Alt+G/K/P/F to the details pages (General, tracKers, Peers, Files - its own letters, not the page order), Alt+1..Alt+8 to the filter rows in order. It is matched on the physical key, so a layout that has moved the letter still works, and it is left alone while a text field has focus - on macOS Alt+letter is how an accent or a symbol is typed, and claiming those keys would make every dialog unusable in a non-English layout. That last part is a deliberate difference |
 | Rename, and "Set data location…" | `acRename`, `acMoveTorrent`, `movetorrent.lfm` | **Done** — F2 renames the selected torrent and F6 opens the original's data-location dialog: the destination starts at where the data is now, with the recent-directory history and a Browse button beside it, and "move the torrent data from the current location to the new location" starts checked, so the files are moved. Unchecked, only the recorded location changes. The rename goes over as `torrent-rename-path` for the torrent's root, so the folder on disk is renamed with it. Both are in the row menu as well, where the original keeps its "Rename" and "Set data location…" items |
@@ -171,9 +172,10 @@ when the folder stopped doing that.
   `pex-allowed` for RPC versions that predate `pex-enabled` and stores the
   tracker list as `announce-list`; this rewrite targets a current Transmission,
   which wants `pex-enabled` and `trackerList` / `trackers`.
-- **Hiding the menu bar** (`acMenuShow`) is not implemented. It is for
+- **Hiding the menu bar** (`acMenuShow`) is not implemented. It exists for
   platforms where the menu belongs to the window; on macOS the menu bar is the
-  system's and the About/Help/Edit items have to stay reachable.
+  system's, and hiding it would take About, Quit and the Edit items with it. The
+  rest of that menu - the four menus themselves - is there, item for item.
 - **Country flags are emoji** computed from the GeoIP country code rather than a
   downloaded `flags.zip`, and country resolution happens whenever the GeoIP
   database is present instead of behind a toggle.
