@@ -18,6 +18,11 @@ export function ViewMenu({ view, onChange }: Props) {
     { key: "details", label: "Details pane" },
     { key: "statusBar", label: "Status bar" },
     { key: "bigToolbar", label: "Big toolbar" },
+    // The original's grouping switches, in its own order. With more than one on
+    // the first of these that is on decides; see grouping.ts.
+    { key: "folderGrouping", label: "Folder grouping" },
+    { key: "labelGrouping", label: "Label grouping" },
+    { key: "trackerGrouping", label: "Tracker grouping" },
   ];
 
   return (

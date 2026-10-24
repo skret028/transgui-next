@@ -396,6 +396,32 @@ table.torrents tbody tr:hover {
 table.torrents tbody tr.sel {
   background: #24354f;
 }
+/* A grouping heading: the value the torrents under it share, and their count.
+   Not selectable and not a torrent row - it has no checkbox and no menu. */
+table.torrents tbody tr.group-row,
+table.torrents tbody tr.group-row:hover {
+  background: #1c2129;
+  cursor: default;
+}
+table.torrents tbody tr.group-row td {
+  padding-top: 5px;
+  padding-bottom: 5px;
+  border-top: 1px solid #313640;
+  border-bottom: 1px solid #313640;
+}
+tr.group-row .group-name {
+  font-weight: 600;
+  color: #c7d2e0;
+}
+tr.group-row .group-count {
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #2b323c;
+  color: #93a0b0;
+  font-size: calc(11px * var(--ui-scale));
+  font-variant-numeric: tabular-nums;
+}
 td.col-name {
   max-width: 380px;
 }

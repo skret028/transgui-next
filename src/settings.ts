@@ -289,6 +289,14 @@ export interface ViewOptions {
   details: boolean;
   statusBar: boolean;
   bigToolbar: boolean;
+  /**
+   * The original's three grouping switches. All three start on, as they do
+   * there (`Ini.ReadBool(…, True)`); with more than one on, the first in the
+   * original's menu order wins. See grouping.ts.
+   */
+  folderGrouping: boolean;
+  labelGrouping: boolean;
+  trackerGrouping: boolean;
 }
 
 export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
@@ -297,6 +305,9 @@ export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
   details: true,
   statusBar: true,
   bigToolbar: false,
+  folderGrouping: true,
+  labelGrouping: true,
+  trackerGrouping: true,
 };
 
 const VIEW_OPTIONS_KEY = "viewOptions";

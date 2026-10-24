@@ -17,6 +17,7 @@ import {
   statusKey,
 } from "../format";
 import { bestSwarm, priorityKey } from "../trackerInfo";
+import { groupRows, type GroupMode, type ListRow } from "../grouping";
 
 interface Props {
   torrents: Torrent[];
@@ -30,6 +31,8 @@ interface Props {
   /** Show dates as how long ago they were, the original's FromNow. */
   fromNow: boolean;
   speedAvg?: Map<number, { down: number; up: number }> | null;
+  /** Which of the original's grouping switches is in play, if any. */
+  groupMode: GroupMode | null;
   onSort: (key: SortKey) => void;
   onRowClick: (id: number, e: MouseEvent) => void;
   onRowContextMenu: (id: number, x: number, y: number) => void;
@@ -132,6 +135,7 @@ export function TorrentTable({
   columns,
   fromNow,
   speedAvg,
+  groupMode,
   onSort,
   onRowClick,
   onRowContextMenu,
@@ -140,6 +144,9 @@ export function TorrentTable({
 }: Props) {
   const t = useT();
   const allSelected = torrents.length > 0 && torrents.every((x) => selection.has(x.id));
+  // Headings are inserted around the rows the list already has, in its current
+  // order, so sorting within a group is still the column sort.
+  const rows: ListRow<Torrent>[] = groupRows(torrents, groupMode);
 
   const cls = (id: ColumnId) => {
     const def = columnDef(id);
@@ -181,7 +188,19 @@ export function TorrentTable({
               </td>
             </tr>
           )}
-          {torrents.map((row) => (
+          {rows.map((item) => {
+            if (item.kind === "group") {
+              return (
+                <tr key={`group:${item.key}`} className="group-row">
+                  <td colSpan={columns.length + 1}>
+                    <span className="group-name">{item.label}</span>
+                    <span className="group-count">{item.count}</span>
+                  </td>
+                </tr>
+              );
+            }
+            const row = item.torrent;
+            return (
             <tr
               key={row.id}
               className={selection.has(row.id) ? "sel" : ""}
@@ -228,7 +247,8 @@ export function TorrentTable({
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

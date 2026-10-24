@@ -92,6 +92,10 @@ export const DEFAULT_VIEW_OPTIONS: ViewOptions = {
   details: true,
   statusBar: true,
   bigToolbar: false,
+  // All three start on, as in the original's ini defaults.
+  folderGrouping: true,
+  labelGrouping: true,
+  trackerGrouping: true,
 };
 export const DEFAULT_SMOOTH_SPEEDS = false;
 export const DEFAULT_TRAY_ALWAYS_VISIBLE = true;
@@ -160,6 +164,9 @@ function sanitizeViewOptions(value: unknown): ViewOptions {
     details: bool(v.details, d.details),
     statusBar: bool(v.statusBar, d.statusBar),
     bigToolbar: bool(v.bigToolbar, d.bigToolbar),
+    folderGrouping: bool(v.folderGrouping, d.folderGrouping),
+    labelGrouping: bool(v.labelGrouping, d.labelGrouping),
+    trackerGrouping: bool(v.trackerGrouping, d.trackerGrouping),
   };
 }
 

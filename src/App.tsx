@@ -15,6 +15,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { rpc } from "./api";
+import { activeGrouping } from "./grouping";
 import {
   DEFAULT_FORM,
   DEFAULT_HIDDEN_REFRESH,
@@ -2393,6 +2394,7 @@ function AppInner() {
             columns={columns}
             fromNow={fromNow}
             speedAvg={displaySpeeds}
+            groupMode={activeGrouping(viewOptions)}
             onSort={onSort}
             onRowClick={onRowClick}
             onRowContextMenu={openRowMenu}
