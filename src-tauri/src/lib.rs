@@ -157,9 +157,26 @@ fn queue_open(app: &AppHandle, target: String) {
     }
 }
 
+/// How many event-loop turns the startup clamp keeps re-applying.
+///
+/// The window-state plugin restores the saved geometry with queued window
+/// commands, which land after `build()` has returned, so `setup` still sees the
+/// geometry from `tauri.conf.json`. Clamping on the first few turns of the loop
+/// catches the restored values once they are in place; the clamp is idempotent,
+/// so re-applying it costs nothing.
+static WINDOW_FIT_TICKS: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(5);
+
 /// Run-loop events: macOS and iOS deliver file-open requests here rather than
 /// through the command line.
 fn handle_run_event(handle: &AppHandle, event: tauri::RunEvent) {
+    if matches!(event, tauri::RunEvent::MainEventsCleared) {
+        let left = WINDOW_FIT_TICKS.load(Ordering::SeqCst);
+        if left > 0 && WINDOW_FIT_TICKS.swap(left - 1, Ordering::SeqCst) == left {
+            if let Some(win) = handle.get_webview_window("main") {
+                fit_window_to_screen(&win);
+            }
+        }
+    }
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     if let tauri::RunEvent::Opened { urls } = event {
         for url in urls {
@@ -722,12 +739,6 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // Before anything else looks at the window: the saved geometry may
-            // be bigger than this screen, and a window whose toolbar runs off
-            // the edge cannot be driven at all.
-            if let Some(win) = app.get_webview_window("main") {
-                fit_window_to_screen(&win);
-            }
             app.manage(geoip::GeoIp::default());
             let handle = app.handle().clone();
             build_tray(&handle)?;
