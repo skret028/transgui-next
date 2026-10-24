@@ -179,6 +179,58 @@ body,
 .modal-foot .grow {
   flex: 1;
 }
+/* The original's tbConnect: connect/disconnect with the saved connections on a
+   drop-down, drawn as one split control. */
+.conn-tool {
+  display: flex;
+  gap: 0;
+}
+.conn-tool > .btn:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.conn-tool-arrow {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+  padding: 5px 7px;
+  color: #9aa4b2;
+}
+.conn-menu {
+  /* Left-aligned: the button sits near the window's left edge, so the default
+     right alignment would push the menu off screen. */
+  left: 0;
+  right: auto;
+  min-width: 200px;
+  padding: 6px;
+}
+.conn-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+.conn-menu-item:hover {
+  background: #2b313a;
+}
+.conn-menu-check {
+  width: 12px;
+  color: #3b82f6;
+}
+.dropdown-sep {
+  height: 1px;
+  background: #363c46;
+  margin: 6px 0;
+}
+
 
 input.narrow {
   width: 70px;

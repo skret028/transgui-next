@@ -521,6 +521,25 @@ function AppInner() {
     setDetail(null);
   }, []);
 
+  /**
+   * Move to another saved connection.
+   *
+   * The form is handed to `connect` directly rather than left to the state
+   * update: the button is the original's drop-down of saved connections, and
+   * picking one there connects to it straight away.
+   */
+  const switchServer = useCallback(
+    (id: string) => {
+      const target = servers.find((s) => s.id === id);
+      if (!target) return;
+      setSelectedServerId(id);
+      setForm(target.form);
+      userDisconnected.current = false;
+      void connect(target.form);
+    },
+    [servers, connect],
+  );
+
   // Bootstrap: load the saved connection and auto-connect when present.
   useEffect(() => {
     let cancelled = false;
@@ -2528,6 +2547,16 @@ function AppInner() {
           onAutoRefreshChange={setAutoRefresh}
           onToggleAltSpeed={toggleAltSpeed}
           onSetSpeed={setSpeedLimit}
+          connecting={connecting}
+          connectionName={servers.find((s) => s.id === selectedServerId)?.name ?? "Transmission"}
+          servers={servers.map((s) => ({ id: s.id, name: s.name }))}
+          selectedServerId={selectedServerId}
+          onConnect={() => {
+            userDisconnected.current = false;
+            void connect();
+          }}
+          onSwitchServer={switchServer}
+          onManageConnections={() => setConnectionsOpen(true)}
           onLoadSession={loadSessionInfo}
           speedDownItems={speedMenuItems(
             downSpeeds,

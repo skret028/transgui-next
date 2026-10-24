@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useT } from "../i18n";
 
 interface Props {
@@ -33,6 +33,15 @@ interface Props {
   /** The connection's speed-limit menu items, already parsed and ordered. */
   speedDownItems: number[];
   speedUpItems: number[];
+  connecting: boolean;
+  /** What the connected button shows: the connection it is on. */
+  connectionName: string;
+  /** The saved connections, for the button's drop-down. */
+  servers: { id: string; name: string }[];
+  selectedServerId: string;
+  onConnect: () => void;
+  onSwitchServer: (id: string) => void;
+  onManageConnections: () => void;
 }
 
 /**
@@ -104,14 +113,98 @@ export function Toolbar({
   onLoadSession,
   speedDownItems,
   speedUpItems,
+  connecting,
+  connectionName,
+  servers,
+  selectedServerId,
+  onConnect,
+  onSwitchServer,
+  onManageConnections,
 }: Props) {
   const t = useT();
   const needSel = selectedCount === 0;
   const busy = !connected || needSel;
   const [speedOpen, setSpeedOpen] = useState(false);
+  const [connOpen, setConnOpen] = useState(false);
+
+  // A menu closes on Escape, as a pop-up menu does in the original.
+  useEffect(() => {
+    if (!connOpen && !speedOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setConnOpen(false);
+      setSpeedOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [connOpen, speedOpen]);
 
   return (
     <section className={`toolbar${big ? " big" : ""}`}>
+      {/* The original's tbConnect: a captioned button that connects and
+          disconnects, with the saved connections on its drop-down. Its caption
+          is where it is connected, and "Connect to Transmission" when it is not
+          - the same swap `DoDisconnect` makes in the original. */}
+      <div className="dropdown-wrap conn-tool">
+        {connected ? (
+          /* Connected, the caption is the connection it is on and pressing it
+             opens the saved ones - `acConnectExecute` checks `RpcObj.Connected`
+             and calls `CheckMenuDropdown` rather than disconnecting. */
+          <button
+            className="btn"
+            onClick={() => setConnOpen((o) => !o)}
+            title={t("Connect to Transmission")}
+            aria-expanded={connOpen}
+          >
+            {connectionName || "Transmission"}
+          </button>
+        ) : (
+          <button className="btn primary" onClick={onConnect} disabled={connecting}>
+            {connecting ? t("Connecting…") : t("Connect to %s", { s: "Transmission" })}
+          </button>
+        )}
+        <button
+          className="btn conn-tool-arrow"
+          onClick={() => setConnOpen((o) => !o)}
+          title={t("Saved servers")}
+          aria-label={t("Saved servers")}
+          aria-expanded={connOpen}
+        >
+          ▾
+        </button>
+        {connOpen && (
+          <>
+            <div className="dropdown-backdrop" onClick={() => setConnOpen(false)} />
+            <div className="dropdown conn-menu">
+              {servers.length === 0 && <div className="muted">{t("(no saved connections)")}</div>}
+              {servers.map((s) => (
+                <button
+                  key={s.id}
+                  className="conn-menu-item"
+                  onClick={() => {
+                    setConnOpen(false);
+                    onSwitchServer(s.id);
+                  }}
+                >
+                  <span className="conn-menu-check">{s.id === selectedServerId && connected ? "✓" : ""}</span>
+                  {s.name}
+                </button>
+              ))}
+              <div className="dropdown-sep" />
+              <button
+                className="conn-menu-item"
+                onClick={() => {
+                  setConnOpen(false);
+                  onManageConnections();
+                }}
+              >
+                <span className="conn-menu-check" />
+                {t("Manage connections")}…
+              </button>
+            </div>
+          </>
+        )}
+      </div>
       <button className="btn" onClick={() => onAction("start")} disabled={busy}>
         {t("Start")}
       </button>
